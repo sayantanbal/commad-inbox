@@ -1,0 +1,617 @@
+"use client";
+
+import Link from "next/link";
+import { format } from "date-fns";
+import { Activity, Command, Keyboard, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
+import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
+import { ActivityBar } from "@/components/inbox/activity-bar";
+import { AgentChatPanel } from "@/components/inbox/agent-chat-panel";
+import { AvailabilityPicker } from "@/components/inbox/availability-picker";
+import { CalendarPanel } from "@/components/inbox/calendar-panel";
+import { CommandPalette } from "@/components/inbox/command-palette";
+import { ComposerPanel } from "@/components/inbox/composer-panel";
+import { ShortcutCheatsheet } from "@/components/inbox/shortcut-cheatsheet";
+import { SnoozePicker } from "@/components/inbox/snooze-picker";
+import { ThreadList } from "@/components/inbox/thread-list";
+import { ThreadView } from "@/components/inbox/thread-view";
+import { UndoToast, type UndoState } from "@/components/inbox/undo-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ResizeHandle } from "@/components/ui/resize-handle";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import type { ActivityItem } from "@/lib/activity";
+import { getModLabel } from "@/lib/shortcuts";
+import type { CalendarEvent, Classification, Thread, TriageLane } from "@/lib/types";
+
+const ACTIVE_LANES: TriageLane[] = ["reply", "schedule", "fyi"];
+const LAYOUT_ID = "command-inbox-v2";
+const SIDEBAR_LAYOUT_ID = "command-inbox-sidebar-v1";
+const LAYOUT_STORAGE_KEY = `react-resizable-panels:${LAYOUT_ID}:list:main:sidebar`;
+const SIDEBAR_LAYOUT_STORAGE_KEY = `react-resizable-panels:${SIDEBAR_LAYOUT_ID}:agent:calendar`;
+const DEFAULT_LAYOUT = { list: 22, main: 48, sidebar: 30 };
+const DEFAULT_SIDEBAR_LAYOUT = { agent: 38, calendar: 62 };
+
+
+
+const laneLabels: Record<TriageLane, string> = {
+  reply: "Reply",
+  schedule: "Schedule",
+  fyi: "FYI",
+  done: "Done",
+};
+
+interface SnoozedThread {
+  threadId: string;
+  until: Date;
+  label: string;
+}
+
+function useIsMac() {
+  const [isMac, setIsMac] = useState(true);
+  useEffect(() => {
+    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
+  }, []);
+  return isMac;
+}
+
+interface InboxShellProps {
+  threads: Thread[];
+  classifications: Classification[];
+  events: CalendarEvent[];
+}
+
+function initialLane(classifications: Classification[]): TriageLane {
+  for (const lane of ACTIVE_LANES) {
+    if (classifications.some((item) => item.lane === lane)) {
+      return lane;
+    }
+  }
+  return "reply";
+}
+
+function initialThreadId(threads: Thread[], classifications: Classification[], lane: TriageLane) {
+  const match = threads.find((thread) => classifications.find((c) => c.threadId === thread.id)?.lane === lane);
+  return match?.id ?? threads[0]?.id ?? null;
+}
+
+export function InboxShell({ threads, classifications: initialClassifications, events }: InboxShellProps) {
+  const isMac = useIsMac();
+  const modLabel = getModLabel(isMac);
+  const startingLane = initialLane(initialClassifications);
+
+  const { defaultLayout: savedLayout, onLayoutChanged } = useDefaultLayout({
+    id: LAYOUT_ID,
+    panelIds: ["list", "main", "sidebar"],
+  });
+
+  const { defaultLayout: savedSidebarLayout, onLayoutChanged: onSidebarLayoutChanged } =
+    useDefaultLayout({
+      id: SIDEBAR_LAYOUT_ID,
+      panelIds: ["agent", "calendar"],
+    });
+
+  const [classifications, setClassifications] = useState(initialClassifications);
+  const [snoozed, setSnoozed] = useState<SnoozedThread[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activeLane, setActiveLane] = useState<TriageLane>(startingLane);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() =>
+    initialThreadId(threads, initialClassifications, startingLane)
+  );
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [threadSearch, setThreadSearch] = useState("");
+  const [calendarSearch, setCalendarSearch] = useState("");
+  const [activityOpen, setActivityOpen] = useState(false);
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [undo, setUndo] = useState<UndoState | null>(null);
+
+  const snoozedIds = useMemo(() => new Set(snoozed.map((s) => s.threadId)), [snoozed]);
+
+  const classificationMap = useMemo(
+    () => new Map(classifications.map((c) => [c.threadId, c])),
+    [classifications]
+  );
+
+  const laneThreads = useMemo(
+    () =>
+      threads.filter((t) => {
+        if (snoozedIds.has(t.id)) return false;
+        return classificationMap.get(t.id)?.lane === activeLane;
+      }),
+    [threads, classificationMap, activeLane, snoozedIds]
+  );
+
+  const filteredLaneThreads = useMemo(() => {
+    const q = threadSearch.trim().toLowerCase();
+    if (!q) return laneThreads;
+    return laneThreads.filter((t) => {
+      const c = classificationMap.get(t.id);
+      return (
+        t.subject.toLowerCase().includes(q) ||
+        t.snippet.toLowerCase().includes(q) ||
+        (c?.sender ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [laneThreads, threadSearch, classificationMap]);
+
+  const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
+  const selectedClassification = selectedThreadId ? classificationMap.get(selectedThreadId) : undefined;
+
+
+
+  // Mock backfill progress completing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setActivities((prev) => prev.filter((a) => a.id !== "backfill"));
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const showUndo = useCallback((message: string, onUndo: () => void) => {
+    setUndo({ message, onUndo });
+  }, []);
+
+  const addActivity = useCallback((item: ActivityItem) => {
+    setActivities((prev) => [...prev, item]);
+  }, []);
+
+  const archiveThread = useCallback(
+    (threadId: string) => {
+      const thread = threads.find((t) => t.id === threadId);
+      setClassifications((prev) =>
+        prev.map((c) => (c.threadId === threadId ? { ...c, lane: "done" as const } : c))
+      );
+      const next = laneThreads.find((t) => t.id !== threadId);
+      if (selectedThreadId === threadId) setSelectedThreadId(next?.id ?? null);
+
+      showUndo(`Archived "${thread?.subject.slice(0, 40)}…"`, () => {
+        setClassifications((prev) =>
+          prev.map((c) =>
+            c.threadId === threadId
+              ? { ...c, lane: (classificationMap.get(threadId)?.lane ?? "reply") as TriageLane }
+              : c
+          )
+        );
+        setSelectedThreadId(threadId);
+      });
+    },
+    [threads, laneThreads, selectedThreadId, showUndo, classificationMap]
+  );
+
+  const snoozeThread = useCallback(
+    (threadId: string, until: Date, label: string) => {
+      const thread = threads.find((t) => t.id === threadId);
+      const activityId = `snooze-${threadId}-${Date.now()}`;
+
+      setSnoozed((prev) => [...prev.filter((s) => s.threadId !== threadId), { threadId, until, label }]);
+      const next = laneThreads.find((t) => t.id !== threadId);
+      if (selectedThreadId === threadId) setSelectedThreadId(next?.id ?? null);
+
+      addActivity({
+        id: activityId,
+        type: "snooze",
+        label: `Snoozed: ${thread?.subject.slice(0, 30)}…`,
+        detail: label,
+        at: until,
+      });
+
+      showUndo(`Snoozed until ${label}`, () => {
+        setSnoozed((prev) => prev.filter((s) => s.threadId !== threadId));
+        setActivities((prev) => prev.filter((a) => a.id !== activityId));
+        setSelectedThreadId(threadId);
+      });
+    },
+    [threads, laneThreads, selectedThreadId, showUndo, addActivity]
+  );
+
+  const openSnooze = useCallback(() => {
+    setSnoozeOpen(true);
+  }, []);
+
+  const navigateThread = useCallback(
+    (direction: 1 | -1) => {
+      if (filteredLaneThreads.length === 0) return;
+      const idx = filteredLaneThreads.findIndex((t) => t.id === selectedThreadId);
+      const nextIdx =
+        idx === -1 ? 0 : (idx + direction + filteredLaneThreads.length) % filteredLaneThreads.length;
+      setSelectedThreadId(filteredLaneThreads[nextIdx].id);
+    },
+    [filteredLaneThreads, selectedThreadId]
+  );
+
+  const handleAction = useCallback(
+    (action: string) => {
+      switch (action) {
+        case "nextThread":
+          navigateThread(1);
+          break;
+        case "prevThread":
+          navigateThread(-1);
+          break;
+        case "archive":
+          if (selectedThreadId) archiveThread(selectedThreadId);
+          break;
+        case "reply":
+          setComposerOpen(true);
+          break;
+        case "meeting":
+          setAvailabilityOpen(true);
+          break;
+        case "snooze":
+          openSnooze();
+          break;
+        case "palette":
+          setPaletteOpen(true);
+          break;
+        case "help":
+          setCheatsheetOpen(true);
+          break;
+        case "select":
+          setMultiSelectMode((v) => !v);
+          setSelectedIds(new Set());
+          break;
+        case "search":
+          setPaletteOpen(true);
+          break;
+        default:
+          break;
+      }
+    },
+    [archiveThread, navigateThread, selectedThreadId, openSnooze]
+  );
+
+  useHotkeys("j", () => handleAction("nextThread"), { enabled: !composerOpen }, [handleAction, composerOpen]);
+  useHotkeys("k", () => handleAction("prevThread"), { enabled: !composerOpen }, [handleAction, composerOpen]);
+  useHotkeys("e", () => handleAction("archive"), { enabled: !!selectedThreadId && !composerOpen }, [
+    handleAction,
+    selectedThreadId,
+    composerOpen,
+  ]);
+  useHotkeys("r", () => handleAction("reply"), { enabled: !!selectedThreadId && !composerOpen }, [
+    handleAction,
+    selectedThreadId,
+    composerOpen,
+  ]);
+  useHotkeys("m", () => handleAction("meeting"), { enabled: !!selectedThreadId && !composerOpen }, [
+    handleAction,
+    selectedThreadId,
+    composerOpen,
+  ]);
+  useHotkeys("s", () => handleAction("snooze"), { enabled: !!selectedThreadId && !composerOpen }, [
+    handleAction,
+    selectedThreadId,
+    composerOpen,
+  ]);
+  useHotkeys("x", () => handleAction("select"), { enabled: !composerOpen }, [handleAction, composerOpen]);
+  useHotkeys("mod+k", (e) => {
+    e.preventDefault();
+    setPaletteOpen(true);
+  });
+  useHotkeys("shift+/", () => setCheatsheetOpen(true));
+  useHotkeys("escape", () => {
+    if (snoozeOpen) setSnoozeOpen(false);
+    else if (availabilityOpen) setAvailabilityOpen(false);
+    else if (composerOpen) setComposerOpen(false);
+    else if (cheatsheetOpen) setCheatsheetOpen(false);
+    else if (paletteOpen) setPaletteOpen(false);
+  });
+
+  const freeSlots = useMemo(() => {
+    const slots: Date[] = [];
+    const base = new Date();
+    for (let i = 1; i <= 5; i++) {
+      const slot = new Date(base);
+      slot.setDate(slot.getDate() + i);
+      slot.setHours(10 + (i % 3) * 2, 0, 0, 0);
+      slots.push(slot);
+    }
+    return slots;
+  }, []);
+
+  const laneCounts = useMemo(() => {
+    const counts: Record<TriageLane, number> = { reply: 0, schedule: 0, fyi: 0, done: 0 };
+    classifications.forEach((c) => {
+      if (!snoozedIds.has(c.threadId)) counts[c.lane]++;
+    });
+    return counts;
+  }, [classifications, snoozedIds]);
+
+  const handleSendLater = useCallback(() => {
+    const sendAt = new Date(Date.now() + 3600000); // 1 hour from now (mock)
+    const activityId = `send-${Date.now()}`;
+    addActivity({
+      id: activityId,
+      type: "scheduled_send",
+      label: `Send later: ${selectedThread?.subject.slice(0, 30)}…`,
+      detail: format(sendAt, "h:mm a · MMM d"),
+      at: sendAt,
+    });
+    setComposerOpen(false);
+    showUndo("Scheduled send — undo to cancel", () => {
+      setActivities((prev) => prev.filter((a) => a.id !== activityId));
+    });
+  }, [selectedThread, addActivity, showUndo]);
+
+  return (
+    <TooltipProvider>
+      <div className="flex h-screen flex-col bg-background">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="text-sm font-semibold tracking-tight hover:opacity-80">
+              Command<span className="text-primary">Inbox</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="hidden text-muted-foreground/70 md:inline">
+              Drag panel edges to resize
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-[10px]"
+              onClick={() => setActivityOpen((v) => !v)}
+            >
+              <Activity className="h-3.5 w-3.5" />
+              Activity
+              {activities.length > 0 && (
+                <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-medium text-primary">
+                  {activities.length}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-[10px]"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Command className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Commands</span>
+              <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">
+                {modLabel}K
+              </kbd>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-[10px]"
+              onClick={() => setCheatsheetOpen(true)}
+            >
+              <Keyboard className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Shortcuts</span>
+              <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">
+                ⇧/
+              </kbd>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden h-7 text-[10px] sm:inline-flex"
+              onClick={() => {
+                localStorage.removeItem(LAYOUT_STORAGE_KEY);
+                localStorage.removeItem(SIDEBAR_LAYOUT_STORAGE_KEY);
+                window.location.reload();
+              }}
+            >
+              Reset layout
+            </Button>
+          </div>
+        </header>
+
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+        <Group
+          orientation="horizontal"
+          className="absolute inset-0 h-full w-full"
+          defaultLayout={savedLayout ?? DEFAULT_LAYOUT}
+          onLayoutChanged={onLayoutChanged}
+          resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
+        >
+          {/* Left: lanes + thread list */}
+          <Panel id="list" defaultSize="22%" minSize="15%" maxSize="40%" className="min-w-0">
+            <aside className="flex h-full flex-col overflow-hidden">
+              <div className="flex border-b border-border">
+                {ACTIVE_LANES.map((lane) => (
+                  <button
+                    key={lane}
+                    type="button"
+                    onClick={() => setActiveLane(lane)}
+                    className={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors ${
+                      activeLane === lane
+                        ? "border-b-2 border-primary text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {laneLabels[lane]}
+                    <span className="ml-1 text-muted-foreground">({laneCounts[lane]})</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="border-b border-border px-3 py-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={threadSearch}
+                    onChange={(e) => setThreadSearch(e.target.value)}
+                    placeholder="Filter threads…"
+                    className="h-8 border-border/60 bg-secondary/30 pl-8 text-xs"
+                  />
+                </div>
+              </div>
+
+              {multiSelectMode && (
+                <div className="flex items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2">
+                  <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      selectedIds.forEach((id) => archiveThread(id));
+                      setSelectedIds(new Set());
+                      setMultiSelectMode(false);
+                    }}
+                  >
+                    Archive
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setSnoozeOpen(true)}
+                  >
+                    Snooze
+                  </Button>
+                </div>
+              )}
+
+              <ScrollArea className="flex-1">
+                <ThreadList
+                  lane={activeLane}
+                  threads={filteredLaneThreads}
+                  classifications={classificationMap}
+                  selectedThreadId={selectedThreadId}
+                  multiSelectMode={multiSelectMode}
+                  selectedIds={selectedIds}
+                  onSelectThread={setSelectedThreadId}
+                  onToggleSelect={(id) => {
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    });
+                  }}
+                />
+              </ScrollArea>
+            </aside>
+          </Panel>
+
+          <ResizeHandle />
+
+          {/* Center: thread view + composer */}
+          <Panel id="main" defaultSize="48%" minSize="30%" className="min-w-0">
+            <main className="flex h-full min-w-0 flex-col overflow-hidden">
+              <ThreadView
+                thread={selectedThread}
+                modLabel={modLabel}
+                onReply={() => setComposerOpen(true)}
+                onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
+                onSchedule={() => setAvailabilityOpen(true)}
+                onSnooze={openSnooze}
+              />
+              <ComposerPanel
+                open={composerOpen}
+                subject={selectedThread?.subject ?? ""}
+                modLabel={modLabel}
+                onClose={() => setComposerOpen(false)}
+                onSend={() => {
+                  setComposerOpen(false);
+                  showUndo("Sending in 5s — undo to cancel", () => {
+                    /* cancel send */
+                  });
+                }}
+                onSendLater={handleSendLater}
+              />
+            </main>
+          </Panel>
+
+          <ResizeHandle />
+
+          {/* Right: resizable agent + calendar */}
+          <Panel id="sidebar" defaultSize="30%" minSize="20%" maxSize="45%" className="min-w-0">
+            <Group
+              orientation="vertical"
+              id={SIDEBAR_LAYOUT_ID}
+              className="h-full"
+              defaultLayout={savedSidebarLayout ?? DEFAULT_SIDEBAR_LAYOUT}
+              onLayoutChanged={onSidebarLayoutChanged}
+              resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
+            >
+              <Panel id="agent" defaultSize="38%" minSize="12%" maxSize="75%" className="min-h-0">
+                <AgentChatPanel />
+              </Panel>
+              <ResizeHandle orientation="vertical" />
+              <Panel id="calendar" defaultSize="62%" minSize="28%" className="min-h-0">
+                <CalendarPanel
+                  events={events}
+                  searchQuery={calendarSearch}
+                  onSearchChange={setCalendarSearch}
+                  onDefrag={() =>
+                    showUndo("Defrag view coming soon", () => {
+                      /* noop */
+                    })
+                  }
+                />
+              </Panel>
+            </Group>
+          </Panel>
+        </Group>
+        </div>
+
+        <ActivityBar
+          items={activities}
+          open={activityOpen}
+          onOpenChange={setActivityOpen}
+          onDismiss={(id) => setActivities((prev) => prev.filter((a) => a.id !== id))}
+          onCancel={(id) => {
+            setActivities((prev) => {
+              const item = prev.find((a) => a.id === id);
+              if (item?.type === "snooze") {
+                const match = item.id.match(/^snooze-(.+)-\d+$/);
+                if (match) {
+                  setSnoozed((s) => s.filter((x) => x.threadId !== match[1]));
+                }
+              }
+              return prev.filter((a) => a.id !== id);
+            });
+          }}
+        />
+
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          isMac={isMac}
+          onAction={handleAction}
+        />
+        <ShortcutCheatsheet open={cheatsheetOpen} onOpenChange={setCheatsheetOpen} isMac={isMac} />
+        <AvailabilityPicker
+          open={availabilityOpen}
+          onOpenChange={setAvailabilityOpen}
+          schedulingIntent={selectedClassification?.schedulingIntent ?? null}
+          freeSlots={freeSlots}
+          onSelectSlot={() => {
+            setAvailabilityOpen(false);
+            setComposerOpen(true);
+            showUndo("Meeting created — confirmation draft ready", () => {
+              /* revert meeting */
+            });
+          }}
+        />
+        <SnoozePicker
+          open={snoozeOpen}
+          onOpenChange={setSnoozeOpen}
+          threadSubject={selectedThread?.subject}
+          onSnooze={(until, label) => {
+            if (multiSelectMode && selectedIds.size > 0) {
+              selectedIds.forEach((id) => snoozeThread(id, until, label));
+              setSelectedIds(new Set());
+              setMultiSelectMode(false);
+            } else if (selectedThreadId) {
+              snoozeThread(selectedThreadId, until, label);
+            }
+          }}
+        />
+        <UndoToast undo={undo} onDismiss={() => setUndo(null)} />
+      </div>
+    </TooltipProvider>
+  );
+}
