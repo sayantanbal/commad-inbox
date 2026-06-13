@@ -24,6 +24,7 @@ export const scheduledSendStatusEnum = pgEnum("scheduled_send_status", [
 ]);
 
 import type { SchedulingIntentStored } from "@/lib/schemas/domain";
+import { EMBEDDING_DIMENSIONS } from "@/lib/ai/providers";
 
 export type SchedulingIntent = SchedulingIntentStored;
 
@@ -52,7 +53,7 @@ export const classifications = pgTable(
     snippet: text("snippet").notNull(),
     schedulingIntent: json("scheduling_intent").$type<SchedulingIntent | null>(),
     classifiedAt: timestamp("classified_at", { withTimezone: true }).defaultNow().notNull(),
-    embedding: vector("embedding", { dimensions: 768 }),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
     embeddingProvider: text("embedding_provider").$type<"gemini" | "openai" | null>(),
   },
   (table) => [

@@ -19,7 +19,7 @@ A keyboard-first Gmail + Google Calendar command center built on [Corsair](https
 | App | Next.js 15, React 19, Tailwind, shadcn/ui |
 | Data | Neon Postgres, Drizzle, pgvector |
 | Integrations | Corsair SDK (`@corsair-dev/gmail`, `@corsair-dev/googlecalendar`, `@corsair-dev/mcp`) |
-| AI | Vercel AI SDK — Gemini 2.0 Flash + GPT-4o mini (fallback on rate limits) |
+| AI | Vercel AI SDK — GPT-5 Nano + Gemini 2.5 Flash (OpenAI first, fallback on rate limits) |
 | Auth | Better Auth (Google) |
 | Realtime | Pusher Channels |
 

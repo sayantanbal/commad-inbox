@@ -2,20 +2,22 @@ export const AI_PROVIDER_IDS = ["openai", "gemini"] as const;
 
 export type AiProvider = (typeof AI_PROVIDER_IDS)[number];
 
+export const EMBEDDING_DIMENSIONS = 768;
+
 export const AI_PROVIDER_CONFIG = {
   gemini: {
     label: "Gemini",
     chatLabel: "Gemini 2.5 Flash",
     chatModel: "gemini-2.5-flash",
     embedModel: "text-embedding-004",
-    dimensions: 768,
+    dimensions: EMBEDDING_DIMENSIONS,
   },
   openai: {
     label: "OpenAI",
-    chatLabel: "GPT-4 mini",
-    chatModel: "gpt-4-mini",
+    chatLabel: "GPT-5 Nano",
+    chatModel: "gpt-5-nano",
     embedModel: "text-embedding-3-small",
-    dimensions: 768,
+    dimensions: EMBEDDING_DIMENSIONS,
   },
 } as const satisfies Record<
   AiProvider,
