@@ -17,15 +17,19 @@ const InboxShell = dynamic(
 
 interface InboxClientProps {
   initialData: SerializedInboxData;
+  userId: string;
+  backfillComplete: boolean;
 }
 
-export function InboxClient({ initialData }: InboxClientProps) {
+export function InboxClient({ initialData, userId, backfillComplete }: InboxClientProps) {
   const data = deserializeInboxData(initialData);
   return (
     <InboxShell
       threads={data.threads}
       classifications={data.classifications}
       events={data.events}
+      userId={userId}
+      backfillComplete={backfillComplete}
     />
   );
 }

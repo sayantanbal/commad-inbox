@@ -167,6 +167,21 @@ We are selling convenience — input must feel native on every device, with zero
 - **Phase 1 Better Auth infra:** Skip `@better-auth/infra` — core auth only.
 - **Phase 1 done criteria:** Auth + connect + real thread list + calendar events.
 - **Phase 1 dev fallback:** No mock — dev must complete real OAuth.
+- **Phase 2 scope:** Webhook → classify → embed → Pusher + `/` semantic search E2E; no calendar webhooks.
+- **Phase 2 Pub/Sub:** Manual GCP topic + `GMAIL_PUBSUB_TOPIC` env; README steps; `set_topic_id` in setup.
+- **Phase 2 webhooks local:** ngrok → `/api/webhooks`; production uses `APP_URL`.
+- **Phase 2 backfill:** 50 threads after connect, background, activity progress; idempotent.
+- **Phase 2 lane defaults:** Keep Reply/medium until backfill completes, then DB-only.
+- **Phase 2 re-classify:** Upsert on every Gmail webhook for that thread.
+- **Phase 2 classifier input:** Subject + latest body (2k cap); `gemini-2.0-flash`.
+- **Phase 2 embeddings:** `subject + sender + snippet`; `text-embedding-004`.
+- **Phase 2 search UX:** `/` opens overlay; classified + backfill window only.
+- **Phase 2 realtime:** Pusher `inbox-{tenantId}` for new-mail + backfill; 5s poll fallback.
+- **Phase 2 done lane:** Classifier may assign `done`; UI stays 3-lane main view.
+- **Phase 2 scheduling intent:** Extract and persist in Phase 2 for Phase 3.
+- **Phase 2 webhook perf:** Inline classify; embed async fire-and-forget.
+- **Phase 2 out of scope:** Send/reply/archive (Phase 3+).
+- **Phase 2 env:** `GOOGLE_GENERATIVE_AI_API_KEY` required when AI routes load.
 
 ## Assumptions
 - Deploy target: Vercel + Neon Postgres with pgvector (free tiers fine). Webhooks in production use the deployed URL; ngrok only for local dev.

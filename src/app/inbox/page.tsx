@@ -2,7 +2,12 @@ import { AuthMissingError } from "corsair/core";
 import { redirect } from "next/navigation";
 import { InboxSetupRequired } from "@/components/inbox/inbox-setup-required";
 import { GmailApiDisabledError } from "@/lib/corsair/api-errors";
-import { withDefaultClassifications, getClassificationsForUser } from "@/lib/corsair/classifications";
+import {
+  withDefaultClassifications,
+  getClassificationsForUser,
+} from "@/lib/corsair/classifications";
+import { triggerInboxBackfill } from "@/lib/backfill/inbox-backfill";
+import { isBackfillComplete } from "@/lib/users/backfill-status";
 import { fetchEventsForTenant } from "@/lib/corsair/events";
 import { fetchThreadsForTenant } from "@/lib/corsair/threads";
 import { requireConnectedTenant } from "@/lib/corsair/tenant";
@@ -24,16 +29,25 @@ export default async function InboxPage() {
   const { tenant, userId } = await requireConnectedTenant();
 
   try {
-    const [threads, storedClassifications, events] = await Promise.all([
+    const [threads, storedClassifications, events, backfillComplete] = await Promise.all([
       fetchThreadsForTenant(tenant),
       getClassificationsForUser(userId),
       fetchEventsForTenant(tenant),
+      isBackfillComplete(userId),
     ]);
 
-    const classifications = withDefaultClassifications(threads, storedClassifications);
+    if (!backfillComplete) {
+      triggerInboxBackfill(userId);
+    }
+
+    const classifications = withDefaultClassifications(threads, storedClassifications, {
+      backfillComplete,
+    });
     const data = serializeInboxData({ threads, classifications, events });
 
-    return <InboxClient initialData={data} />;
+    return (
+      <InboxClient initialData={data} userId={userId} backfillComplete={backfillComplete} />
+    );
   } catch (error) {
     if (isAuthError(error)) {
       redirect("/onboarding/connect?reconnect=1");

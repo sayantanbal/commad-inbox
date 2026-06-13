@@ -34,25 +34,34 @@ export async function getClassificationsForUser(userId: string): Promise<Classif
 
 export function withDefaultClassifications(
   threads: Thread[],
-  existing: Classification[]
+  existing: Classification[],
+  options?: { backfillComplete?: boolean }
 ): Classification[] {
   const byThreadId = new Map(existing.map((item) => [item.threadId, item]));
+  const backfillComplete = options?.backfillComplete ?? false;
 
-  return threads.map((thread) => {
-    const stored = byThreadId.get(thread.id);
-    if (stored) return stored;
+  return threads
+    .map((thread) => {
+      const stored = byThreadId.get(thread.id);
+      if (stored) return stored;
 
-    const sender = thread.participants[0]?.name ?? thread.participants[0]?.email ?? "Unknown";
+      if (backfillComplete) {
+        return null;
+      }
 
-    return {
-      threadId: thread.id,
-      priority: DEFAULT_PRIORITY,
-      lane: DEFAULT_LANE,
-      subject: thread.subject,
-      sender,
-      snippet: thread.snippet,
-      schedulingIntent: null,
-      classifiedAt: thread.timestamp,
-    };
-  });
+      const sender = thread.participants[0]?.name ?? thread.participants[0]?.email ?? "Unknown";
+
+      return {
+        threadId: thread.id,
+        priority: DEFAULT_PRIORITY,
+        lane: DEFAULT_LANE,
+        subject: thread.subject,
+        sender,
+        snippet: thread.snippet,
+        schedulingIntent: null,
+        classifiedAt: thread.timestamp,
+      };
+    })
+    .filter((item): item is Classification => item !== null);
 }
+

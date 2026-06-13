@@ -9,6 +9,8 @@ import {
   OAUTH_STATE_COOKIE,
   startPluginOAuth,
 } from "@/lib/corsair/oauth";
+import { triggerInboxBackfill } from "@/lib/backfill/inbox-backfill";
+import { isBackfillComplete } from "@/lib/users/backfill-status";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -54,6 +56,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (await isTenantFullyConnected(result.tenantId)) {
+      if (!(await isBackfillComplete(result.tenantId))) {
+        triggerInboxBackfill(result.tenantId);
+      }
       const response = NextResponse.redirect(new URL("/inbox", request.url));
       response.cookies.delete(OAUTH_STATE_COOKIE);
       return response;

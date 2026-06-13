@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Activity, Command, Keyboard, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +25,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ActivityItem } from "@/lib/activity";
 import { getModLabel } from "@/lib/shortcuts";
+import { SearchOverlay } from "@/components/inbox/search-overlay";
+import { useInboxRealtime } from "@/hooks/use-inbox-realtime";
+import { mergeClassifications } from "@/lib/inbox/merge-classifications";
+import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
 import type { CalendarEvent, Classification, Thread, TriageLane } from "@/lib/types";
 
 const ACTIVE_LANES: TriageLane[] = ["reply", "schedule", "fyi"];
@@ -61,6 +66,8 @@ interface InboxShellProps {
   threads: Thread[];
   classifications: Classification[];
   events: CalendarEvent[];
+  userId: string;
+  backfillComplete: boolean;
 }
 
 function initialLane(classifications: Classification[]): TriageLane {
@@ -77,7 +84,14 @@ function initialThreadId(threads: Thread[], classifications: Classification[], l
   return match?.id ?? threads[0]?.id ?? null;
 }
 
-export function InboxShell({ threads, classifications: initialClassifications, events }: InboxShellProps) {
+export function InboxShell({
+  threads,
+  classifications: initialClassifications,
+  events,
+  userId,
+  backfillComplete,
+}: InboxShellProps) {
+  const router = useRouter();
   const isMac = useIsMac();
   const modLabel = getModLabel(isMac);
   const startingLane = initialLane(initialClassifications);
@@ -111,6 +125,7 @@ export function InboxShell({ threads, classifications: initialClassifications, e
   const [composerOpen, setComposerOpen] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [undo, setUndo] = useState<UndoState | null>(null);
 
   const snoozedIds = useMemo(() => new Set(snoozed.map((s) => s.threadId)), [snoozed]);
@@ -147,13 +162,62 @@ export function InboxShell({ threads, classifications: initialClassifications, e
 
 
 
-  // Mock backfill progress completing
   useEffect(() => {
-    const timer = setTimeout(() => {
+    if (!backfillComplete) {
+      setActivities((prev) => {
+        if (prev.some((a) => a.id === "backfill")) return prev;
+        return [
+          {
+            id: "backfill",
+            type: "background",
+            label: "Setting up inbox",
+            detail: "Classifying recent threads…",
+            progress: 0,
+          },
+          ...prev,
+        ];
+      });
+    }
+  }, [backfillComplete]);
+
+  const handleRealtimeEvent = useCallback((event: InboxRealtimeEvent) => {
+    if (event.type === "classification-updated") {
+      setClassifications((prev) => mergeClassifications(prev, event.classification));
+    }
+    if (event.type === "backfill-progress") {
+      const pct = event.total > 0 ? Math.round((event.completed / event.total) * 100) : 0;
+      setActivities((prev) =>
+        prev.map((a) =>
+          a.id === "backfill"
+            ? {
+                ...a,
+                detail: `Classifying threads… ${event.completed}/${event.total}`,
+                progress: pct,
+              }
+            : a
+        )
+      );
+    }
+    if (event.type === "backfill-complete") {
       setActivities((prev) => prev.filter((a) => a.id !== "backfill"));
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
+      router.refresh();
+    }
+  }, [router]);
+
+  const pollInbox = useCallback(() => {
+    router.refresh();
+  }, [router]);
+
+  useInboxRealtime(userId, handleRealtimeEvent, pollInbox);
+
+  useHotkeys(
+    "/",
+    (e) => {
+      e.preventDefault();
+      setSearchOpen(true);
+    },
+    { enableOnFormTags: false }
+  );
 
   const showUndo = useCallback((message: string, onUndo: () => void) => {
     setUndo({ message, onUndo });
@@ -607,6 +671,17 @@ export function InboxShell({ threads, classifications: initialClassifications, e
               setMultiSelectMode(false);
             } else if (selectedThreadId) {
               snoozeThread(selectedThreadId, until, label);
+            }
+          }}
+        />
+        <SearchOverlay
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          onSelectThread={(threadId) => {
+            setSelectedThreadId(threadId);
+            const lane = classifications.find((c) => c.threadId === threadId)?.lane;
+            if (lane && lane !== "done") {
+              setActiveLane(lane);
             }
           }}
         />

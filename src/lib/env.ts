@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+/** Treat unset or blank env values as undefined for optional vars. */
+function optionalNonEmpty() {
+  return z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().min(1).optional()
+  );
+}
+
 /**
  * Phase 0 (infrastructure) — required to boot DB + Corsair.
  * Phase 1+ vars are optional until those features ship.
@@ -26,19 +34,25 @@ const envSchema = z.object({
   APP_URL: z.string().url().optional(),
 
   /** Session signing secret — required in Phase 1 (Better Auth core) */
-  BETTER_AUTH_SECRET: z.string().min(32).optional(),
+  BETTER_AUTH_SECRET: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().min(32).optional()
+  ),
 
   /** Optional — @better-auth/infra (Dash/Sentinel); not required for local auth */
-  BETTER_AUTH_API_KEY: z.string().optional(),
+  BETTER_AUTH_API_KEY: optionalNonEmpty(),
 
-  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: optionalNonEmpty(),
 
-  PUSHER_APP_ID: z.string().optional(),
-  PUSHER_KEY: z.string().optional(),
-  PUSHER_SECRET: z.string().optional(),
-  PUSHER_CLUSTER: z.string().optional(),
+  /** Gmail Pub/Sub topic for push notifications (projects/…/topics/…) */
+  GMAIL_PUBSUB_TOPIC: optionalNonEmpty(),
 
-  CRON_SECRET: z.string().optional(),
+  PUSHER_APP_ID: optionalNonEmpty(),
+  PUSHER_KEY: optionalNonEmpty(),
+  PUSHER_SECRET: optionalNonEmpty(),
+  PUSHER_CLUSTER: optionalNonEmpty(),
+
+  CRON_SECRET: optionalNonEmpty(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -65,6 +79,15 @@ export function assertPhase1Env(): void {
   if (!env.BETTER_AUTH_SECRET) {
     throw new Error(
       "BETTER_AUTH_SECRET is required for authentication. Generate with: openssl rand -base64 32"
+    );
+  }
+}
+
+/** Vars required for Phase 2 classifier + semantic search. */
+export function assertPhase2Env(): void {
+  if (!env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    throw new Error(
+      "GOOGLE_GENERATIVE_AI_API_KEY is required for Phase 2 classification and search."
     );
   }
 }
