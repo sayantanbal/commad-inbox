@@ -152,12 +152,15 @@ export async function cancelMeetingApi(threadId: string) {
   return response.json() as Promise<{ eventId: string }>;
 }
 
-export async function generateDraftApi(threadId: string, tone: "professional" | "friendly" | "brief") {
+export async function generateDraftApi(
+  threadId: string,
+  tone: "professional" | "friendly" | "brief"
+) {
   const response = await fetch("/api/inbox/draft", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ threadId, tone }),
   });
   if (!response.ok) throw new Error(await parseError(response));
-  return response.json() as Promise<{ draftHtml: string }>;
+  return response.json() as Promise<{ draftHtml: string; source: "ai" | "template" }>;
 }

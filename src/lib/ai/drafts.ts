@@ -1,5 +1,6 @@
-import { format } from "date-fns";
-import { geminiGenerateText } from "@/lib/ai/gemini";
+import { generateTextWithProvider } from "@/lib/ai/generate";
+import { getDefaultProvider } from "@/lib/ai/with-fallback";
+import type { AiProvider } from "@/lib/ai/providers";
 import type { Thread } from "@/lib/types";
 
 function textToHtml(text: string): string {
@@ -10,40 +11,34 @@ function textToHtml(text: string): string {
   return `<p>${escaped.split(/\n\n+/).join("</p><p>")}</p>`;
 }
 
-export async function generateConfirmationDraft(input: {
+function templateReplyDraft(input: {
   thread: Thread;
-  slotStart: Date;
-  durationMinutes: number;
-  hangoutLink?: string;
-}): Promise<string> {
-  const when = format(input.slotStart, "EEEE, MMMM d 'at' h:mm a");
-  const prompt = `Thread subject: ${input.thread.subject}
-Latest message:
-${input.thread.messages.at(-1)?.body ?? input.thread.snippet}
-
-Meeting time: ${when} (${input.durationMinutes} minutes)
-${input.hangoutLink ? `Google Meet: ${input.hangoutLink}` : ""}
-
-Write a short confirmation reply (2-4 sentences, professional tone). Return plain text only.`;
-
-  const draft = await geminiGenerateText(
-    prompt,
-    "You draft concise meeting confirmation emails. Plain text only, no subject line."
-  );
-  return textToHtml(draft);
+  tone: "professional" | "friendly" | "brief";
+}): string {
+  const subject = input.thread.subject.trim() || "your message";
+  const templates = {
+    professional: `Thank you for your email regarding "${subject}". I appreciate you reaching out and will follow up with a detailed response shortly.`,
+    friendly: `Thanks for reaching out about "${subject}"! I saw your note and will get back to you soon.`,
+    brief: `Thanks — received your message on "${subject}". I'll follow up shortly.`,
+  };
+  return templates[input.tone];
 }
 
 export async function generateReplyDraft(input: {
   thread: Thread;
   tone: "professional" | "friendly" | "brief";
-}): Promise<string> {
-  const toneGuide = {
-    professional: "formal and courteous",
-    friendly: "warm and conversational",
-    brief: "minimal, under 3 sentences",
-  }[input.tone];
+  provider?: AiProvider;
+}): Promise<{ draftHtml: string; source: "ai" | "template" }> {
+  const preferred = input.provider ?? getDefaultProvider();
 
-  const prompt = `Thread subject: ${input.thread.subject}
+  try {
+    const toneGuide = {
+      professional: "formal and courteous",
+      friendly: "warm and conversational",
+      brief: "minimal, under 3 sentences",
+    }[input.tone];
+
+    const prompt = `Thread subject: ${input.thread.subject}
 Conversation:
 ${input.thread.messages
   .slice(-3)
@@ -52,9 +47,50 @@ ${input.thread.messages
 
 Write a ${toneGuide} reply. Plain text only.`;
 
-  const draft = await geminiGenerateText(
-    prompt,
-    "You draft email replies. Plain text only, no subject line or signature block."
-  );
-  return textToHtml(draft);
+    const { text: draft } = await generateTextWithProvider(
+      preferred,
+      prompt,
+      "You draft email replies. Plain text only, no subject line or signature block."
+    );
+    return { draftHtml: textToHtml(draft), source: "ai" };
+  } catch (error) {
+    console.warn("[draft] AI providers unavailable, using template:", error);
+    return { draftHtml: textToHtml(templateReplyDraft(input)), source: "template" };
+  }
+}
+
+export async function generateConfirmationDraft(input: {
+  thread: Thread;
+  slotStart: Date;
+  durationMinutes: number;
+  hangoutLink?: string;
+  provider?: AiProvider;
+}): Promise<string> {
+  const { format } = await import("date-fns");
+  const when = format(input.slotStart, "EEEE, MMMM d 'at' h:mm a");
+  const preferred = input.provider ?? getDefaultProvider();
+
+  try {
+    const prompt = `Thread subject: ${input.thread.subject}
+Latest message:
+${input.thread.messages.at(-1)?.body ?? input.thread.snippet}
+
+Meeting time: ${when} (${input.durationMinutes} minutes)
+${input.hangoutLink ? `Google Meet: ${input.hangoutLink}` : ""}
+
+Write a short confirmation reply (2-4 sentences, professional tone). Return plain text only.`;
+
+    const { text: draft } = await generateTextWithProvider(
+      preferred,
+      prompt,
+      "You draft concise meeting confirmation emails. Plain text only, no subject line."
+    );
+    return textToHtml(draft);
+  } catch (error) {
+    console.warn("[draft] confirmation AI unavailable, using template:", error);
+    const meet = input.hangoutLink ? `\n\nMeet link: ${input.hangoutLink}` : "";
+    return textToHtml(
+      `Thank you — I've sent a calendar invite for ${when}.${meet}\n\nLooking forward to speaking with you.`
+    );
+  }
 }

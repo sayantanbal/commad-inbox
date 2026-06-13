@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { generateConfirmationDraft } from "@/lib/ai/drafts";
 import { assertPhase2Env } from "@/lib/env";
@@ -17,18 +17,7 @@ import {
   getThreadMeetingForThread,
   upsertThreadMeeting,
 } from "@/lib/inbox/thread-meetings";
-
-const createSchema = z.object({
-  threadId: z.string().min(1),
-  slotStart: z.string().datetime(),
-  durationMinutes: z.number().int().min(15).max(240).optional(),
-});
-
-const updateSchema = createSchema;
-
-const cancelSchema = z.object({
-  threadId: z.string().min(1),
-});
+import { meetingCancelBodySchema, meetingCreateBodySchema } from "@/lib/schemas/api";
 
 async function loadThreadContext(
   auth: Exclude<Awaited<ReturnType<typeof requireSessionApi>>, { error: Response }>,
@@ -61,10 +50,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 503 });
   }
 
-  const parsed = createSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, meetingCreateBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   const existing = await getThreadMeetingForThread(auth.userId, parsed.data.threadId);
   if (existing) {
@@ -144,10 +131,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: message }, { status: 503 });
   }
 
-  const parsed = updateSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, meetingCreateBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   const linked = await getThreadMeetingForThread(auth.userId, parsed.data.threadId);
   if (!linked) {
@@ -203,10 +188,8 @@ export async function DELETE(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const parsed = cancelSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, meetingCancelBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   const linked = await getThreadMeetingForThread(auth.userId, parsed.data.threadId);
   if (!linked) {

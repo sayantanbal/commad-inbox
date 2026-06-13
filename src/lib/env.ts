@@ -1,3 +1,5 @@
+import "server-only";
+
 import { z } from "zod";
 
 /** Treat unset or blank env values as undefined for optional vars. */
@@ -44,6 +46,8 @@ const envSchema = z.object({
 
   GOOGLE_GENERATIVE_AI_API_KEY: optionalNonEmpty(),
 
+  OPENAI_API_KEY: optionalNonEmpty(),
+
   /** Gmail Pub/Sub topic for push notifications (projects/…/topics/…) */
   GMAIL_PUBSUB_TOPIC: optionalNonEmpty(),
 
@@ -85,9 +89,9 @@ export function assertPhase1Env(): void {
 
 /** Vars required for Phase 2 classifier + semantic search. */
 export function assertPhase2Env(): void {
-  if (!env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  if (!env.GOOGLE_GENERATIVE_AI_API_KEY && !env.OPENAI_API_KEY) {
     throw new Error(
-      "GOOGLE_GENERATIVE_AI_API_KEY is required for Phase 2 classification and search."
+      "At least one AI provider key is required (GOOGLE_GENERATIVE_AI_API_KEY or OPENAI_API_KEY)."
     );
   }
 }

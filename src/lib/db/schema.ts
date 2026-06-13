@@ -23,12 +23,9 @@ export const scheduledSendStatusEnum = pgEnum("scheduled_send_status", [
   "failed",
 ]);
 
-export type SchedulingIntent = {
-  proposedTimes: string[];
-  attendees: string[];
-  duration: number;
-  confidence: number;
-};
+import type { SchedulingIntentStored } from "@/lib/schemas/domain";
+
+export type SchedulingIntent = SchedulingIntentStored;
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -56,10 +53,12 @@ export const classifications = pgTable(
     schedulingIntent: json("scheduling_intent").$type<SchedulingIntent | null>(),
     classifiedAt: timestamp("classified_at", { withTimezone: true }).defaultNow().notNull(),
     embedding: vector("embedding", { dimensions: 768 }),
+    embeddingProvider: text("embedding_provider").$type<"gemini" | "openai" | null>(),
   },
   (table) => [
     index("classifications_user_idx").on(table.userId),
     index("classifications_user_thread_idx").on(table.userId, table.threadId),
+    index("classifications_user_provider_idx").on(table.userId, table.embeddingProvider),
   ]
 );
 

@@ -1,20 +1,10 @@
-import { z } from "zod";
-import { geminiGenerateJson } from "@/lib/ai/gemini";
-import type { Priority, TriageLane } from "@/lib/types";
-import type { SchedulingIntent } from "@/lib/db/schema";
-
-const classificationResultSchema = z.object({
-  priority: z.enum(["high", "medium", "low"]),
-  lane: z.enum(["reply", "schedule", "fyi", "done"]),
-  schedulingIntent: z
-    .object({
-      proposedTimes: z.array(z.string()),
-      attendees: z.array(z.string()),
-      duration: z.number().int().positive(),
-      confidence: z.number().min(0).max(1),
-    })
-    .nullable(),
-});
+import { generateJsonWithProvider } from "@/lib/ai/generate";
+import { getDefaultProvider } from "@/lib/ai/with-fallback";
+import {
+  classificationResultSchema,
+  DEFAULT_CLASSIFICATION_RESULT,
+  type ClassificationResult,
+} from "@/lib/schemas/domain";
 
 export type ClassifyThreadInput = {
   subject: string;
@@ -23,11 +13,7 @@ export type ClassifyThreadInput = {
   body: string;
 };
 
-export type ClassifyThreadResult = {
-  priority: Priority;
-  lane: TriageLane;
-  schedulingIntent: SchedulingIntent | null;
-};
+export type ClassifyThreadResult = ClassificationResult;
 
 const SYSTEM = `You triage email for a consultant whose inbox is a meeting pipeline.
 Return JSON only with keys: priority, lane, schedulingIntent.
@@ -45,12 +31,16 @@ Snippet: ${input.snippet}
 Body:
 ${body}`;
 
-  const raw = await geminiGenerateJson<unknown>(prompt, SYSTEM);
-  const parsed = classificationResultSchema.parse(raw);
-
-  return {
-    priority: parsed.priority,
-    lane: parsed.lane,
-    schedulingIntent: parsed.schedulingIntent,
-  };
+  try {
+    const { data } = await generateJsonWithProvider(
+      getDefaultProvider(),
+      prompt,
+      SYSTEM,
+      classificationResultSchema
+    );
+    return data;
+  } catch (error) {
+    console.warn("[classify] AI request failed, using defaults:", error);
+    return DEFAULT_CLASSIFICATION_RESULT;
+  }
 }

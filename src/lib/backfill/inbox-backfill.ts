@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { isGeminiQuotaError } from "@/lib/ai/gemini";
+import { isRateLimitError } from "@/lib/ai/rate-limit";
 import { classifyThreadForUser } from "@/lib/classifier/persist";
 import { corsair } from "@/lib/corsair";
 import { db } from "@/lib/db";
@@ -38,9 +38,9 @@ export async function runInboxBackfill(userId: string): Promise<void> {
     try {
       await classifyThreadForUser(userId, tenant, threadId);
     } catch (error) {
-      if (isGeminiQuotaError(error)) {
+      if (isRateLimitError(error)) {
         quotaExhausted = true;
-        console.warn("[backfill] Gemini quota exhausted — pausing backfill");
+        console.warn("[backfill] AI quota exhausted — pausing backfill");
         break;
       }
       console.error("[backfill] thread failed", threadId, error);

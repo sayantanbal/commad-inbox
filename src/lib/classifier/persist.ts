@@ -1,6 +1,8 @@
-import { sql } from "drizzle-orm";
 import { classifyThread } from "@/lib/classifier/classify-thread";
-import { geminiEmbed } from "@/lib/ai/gemini";
+import { embedWithProvider } from "@/lib/ai/embed";
+import { getDefaultProvider } from "@/lib/ai/with-fallback";
+import { classificationEmbedText } from "@/lib/embeddings/classification-text";
+import { storeClassificationEmbedding } from "@/lib/embeddings/store";
 import { mapGmailThread } from "@/lib/corsair/gmail-parse";
 import type { CorsairInstance } from "@/lib/corsair";
 import { db } from "@/lib/db";
@@ -10,10 +12,6 @@ import { broadcastInboxEvent } from "@/lib/realtime/pusher";
 
 function classificationId(userId: string, threadId: string): string {
   return `${userId}:${threadId}`;
-}
-
-function embedText(subject: string, sender: string, snippet: string): string {
-  return `${subject}\n${sender}\n${snippet}`.trim();
 }
 
 function latestBody(thread: ReturnType<typeof mapGmailThread>): string {
@@ -105,13 +103,11 @@ async function embedClassificationAsync(
   snippet: string
 ): Promise<void> {
   try {
-    const vector = await geminiEmbed(embedText(subject, sender, snippet));
-    const literal = `[${vector.join(",")}]`;
-    await db.execute(sql`
-      UPDATE classifications
-      SET embedding = ${literal}::vector
-      WHERE user_id = ${userId} AND thread_id = ${threadId}
-    `);
+    const { vector, provider } = await embedWithProvider(
+      getDefaultProvider(),
+      classificationEmbedText(subject, sender, snippet)
+    );
+    await storeClassificationEmbedding(userId, threadId, vector, provider);
   } catch (error) {
     console.error("[embed] failed for thread", threadId, error);
   }

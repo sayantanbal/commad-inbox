@@ -13,6 +13,7 @@ import { CalendarPanel } from "@/components/inbox/calendar-panel";
 import { CommandPalette } from "@/components/inbox/command-palette";
 import { ComposerPanel } from "@/components/inbox/composer-panel";
 import { ShortcutCheatsheet } from "@/components/inbox/shortcut-cheatsheet";
+import { MobileCommandFab, MobileTabBar, type MobileTab } from "@/components/inbox/mobile-tab-bar";
 import { SnoozePicker } from "@/components/inbox/snooze-picker";
 import { ThreadList } from "@/components/inbox/thread-list";
 import { ThreadView } from "@/components/inbox/thread-view";
@@ -39,9 +40,11 @@ import {
 } from "@/lib/inbox/client-api";
 import { replyRecipients, resolveMeetingAttendees } from "@/lib/inbox/recipients";
 import { summarizeRsvp } from "@/lib/inbox/rsvp";
-import { getModLabel } from "@/lib/shortcuts";
 import { SearchOverlay } from "@/components/inbox/search-overlay";
+import { AdvancedSearchOverlay } from "@/components/inbox/advanced-search-overlay";
 import { useInboxRealtime } from "@/hooks/use-inbox-realtime";
+import { useInboxShortcuts } from "@/hooks/use-inbox-shortcuts";
+import { useIsMobile, usePlatform } from "@/hooks/use-platform";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
 import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
 import type { CalendarEvent, Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
@@ -67,14 +70,6 @@ interface SnoozedThread {
   threadId: string;
   until: Date;
   label: string;
-}
-
-function useIsMac() {
-  const [isMac, setIsMac] = useState(true);
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
-  }, []);
-  return isMac;
 }
 
 interface InboxShellProps {
@@ -113,8 +108,8 @@ export function InboxShell({
   initialSnoozes,
 }: InboxShellProps) {
   const router = useRouter();
-  const isMac = useIsMac();
-  const modLabel = getModLabel(isMac);
+  const { isMac, modLabel } = usePlatform();
+  const isMobile = useIsMobile();
   const startingLane = initialLane(initialClassifications);
 
   const { defaultLayout: savedLayout, onLayoutChanged } = useDefaultLayout({
@@ -158,6 +153,9 @@ export function InboxShell({
   const [availabilityMode, setAvailabilityMode] = useState<"create" | "reschedule">("create");
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("inbox");
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [undo, setUndo] = useState<UndoState | null>(null);
 
   const snoozedIds = useMemo(() => new Set(snoozed.map((s) => s.threadId)), [snoozed]);
@@ -279,6 +277,37 @@ export function InboxShell({
       setActivities((prev) => prev.filter((a) => a.id !== "backfill"));
       router.refresh();
     }
+    if (event.type === "reembed-progress") {
+      const pct = event.total > 0 ? Math.round((event.completed / event.total) * 100) : 0;
+      setActivities((prev) => {
+        const existing = prev.find((a) => a.id === "reembed");
+        if (existing) {
+          return prev.map((a) =>
+            a.id === "reembed"
+              ? {
+                  ...a,
+                  detail: `Re-indexing search… ${event.completed}/${event.total}`,
+                  progress: pct,
+                }
+              : a
+          );
+        }
+        return [
+          {
+            id: "reembed",
+            type: "background",
+            label: "Re-indexing search",
+            detail: `Re-indexing search… ${event.completed}/${event.total}`,
+            progress: pct,
+          },
+          ...prev,
+        ];
+      });
+    }
+    if (event.type === "reembed-complete") {
+      setActivities((prev) => prev.filter((a) => a.id !== "reembed"));
+      router.refresh();
+    }
   }, [router]);
 
   const pollInbox = useCallback(() => {
@@ -286,15 +315,6 @@ export function InboxShell({
   }, [router]);
 
   useInboxRealtime(userId, handleRealtimeEvent, pollInbox);
-
-  useHotkeys(
-    "/",
-    (e) => {
-      e.preventDefault();
-      setSearchOpen(true);
-    },
-    { enableOnFormTags: false }
-  );
 
   const showUndo = useCallback((message: string, onUndo: () => void) => {
     setUndo({ message, onUndo });
@@ -386,12 +406,41 @@ export function InboxShell({
     setComposerDraft("<p></p>");
     setDraftLoading(true);
     void generateDraftApi(selectedThreadId, "professional")
-      .then((result) => setComposerDraft(result.draftHtml))
+      .then((result) => {
+        setComposerDraft(result.draftHtml);
+        if (result.source === "template") {
+          showUndo("AI quota exhausted — template draft inserted", () => undefined);
+        }
+      })
       .catch(() => {
         showUndo("AI draft unavailable — write your reply manually", () => undefined);
       })
       .finally(() => setDraftLoading(false));
   }, [selectedThreadId, showUndo]);
+
+  const handleCancelMeeting = useCallback(async () => {
+    if (!selectedThreadId || !selectedLinkedMeeting) return;
+
+    const snapshot = selectedLinkedMeeting;
+    const snapshotEvent = selectedLinkedEvent;
+
+    setThreadMeetings((prev) => prev.filter((meeting) => meeting.threadId !== selectedThreadId));
+    setCalendarEvents((prev) => prev.filter((event) => event.id !== snapshot.eventId));
+
+    try {
+      await cancelMeetingApi(selectedThreadId);
+      showUndo("Meeting cancelled — attendees notified", () => undefined);
+    } catch (error) {
+      setThreadMeetings((prev) => [...prev, snapshot]);
+      if (snapshotEvent) {
+        setCalendarEvents((prev) => [...prev, snapshotEvent]);
+      }
+      showUndo(
+        error instanceof Error ? error.message : "Could not cancel meeting",
+        () => undefined
+      );
+    }
+  }, [selectedLinkedEvent, selectedLinkedMeeting, selectedThreadId, showUndo]);
 
   const openScheduleMeeting = useCallback(() => {
     if (!selectedThreadId) return;
@@ -424,50 +473,60 @@ export function InboxShell({
           setPaletteOpen(true);
           break;
         case "help":
-          setCheatsheetOpen(true);
+          setCheatsheetOpen((open) => !open);
           break;
         case "select":
           setMultiSelectMode((v) => !v);
           setSelectedIds(new Set());
           break;
         case "search":
-          setPaletteOpen(true);
+          setSearchOpen(true);
+          break;
+        case "advancedSearch":
+          setAdvancedSearchOpen(true);
+          break;
+        case "cancelMeeting":
+          void handleCancelMeeting();
           break;
         default:
           break;
       }
     },
-    [archiveThread, navigateThread, openScheduleMeeting, openSnooze, openReplyComposer, selectedThreadId]
+    [
+      archiveThread,
+      handleCancelMeeting,
+      navigateThread,
+      openScheduleMeeting,
+      openSnooze,
+      openReplyComposer,
+      selectedThreadId,
+    ]
   );
 
-  useHotkeys("j", () => handleAction("nextThread"), { enabled: !composerOpen }, [handleAction, composerOpen]);
-  useHotkeys("k", () => handleAction("prevThread"), { enabled: !composerOpen }, [handleAction, composerOpen]);
-  useHotkeys("e", () => handleAction("archive"), { enabled: !!selectedThreadId && !composerOpen }, [
-    handleAction,
-    selectedThreadId,
-    composerOpen,
-  ]);
-  useHotkeys("r", () => handleAction("reply"), { enabled: !!selectedThreadId && !composerOpen }, [
-    handleAction,
-    selectedThreadId,
-    composerOpen,
-  ]);
-  useHotkeys("m", () => handleAction("meeting"), { enabled: !!selectedThreadId && !composerOpen }, [
-    handleAction,
-    selectedThreadId,
-    composerOpen,
-  ]);
-  useHotkeys("s", () => handleAction("snooze"), { enabled: !!selectedThreadId && !composerOpen }, [
-    handleAction,
-    selectedThreadId,
-    composerOpen,
-  ]);
-  useHotkeys("x", () => handleAction("select"), { enabled: !composerOpen }, [handleAction, composerOpen]);
-  useHotkeys("mod+k", (e) => {
-    e.preventDefault();
-    setPaletteOpen(true);
-  });
-  useHotkeys("shift+/", () => setCheatsheetOpen(true));
+  const shortcutState = useMemo(
+    () => ({
+      composerOpen,
+      paletteOpen,
+      snoozeOpen,
+      availabilityOpen,
+      cheatsheetOpen,
+      searchOpen,
+      advancedSearchOpen,
+      selectedThreadId,
+    }),
+    [
+      availabilityOpen,
+      cheatsheetOpen,
+      composerOpen,
+      paletteOpen,
+      searchOpen,
+      advancedSearchOpen,
+      selectedThreadId,
+      snoozeOpen,
+    ]
+  );
+
+  useInboxShortcuts(shortcutState, isMac, handleAction);
   const closeComposer = useCallback(() => {
     setComposerOpen(false);
     setComposerDraft("");
@@ -635,30 +694,6 @@ export function InboxShell({
     ]
   );
 
-  const handleCancelMeeting = useCallback(async () => {
-    if (!selectedThreadId || !selectedLinkedMeeting) return;
-
-    const snapshot = selectedLinkedMeeting;
-    const snapshotEvent = selectedLinkedEvent;
-
-    setThreadMeetings((prev) => prev.filter((meeting) => meeting.threadId !== selectedThreadId));
-    setCalendarEvents((prev) => prev.filter((event) => event.id !== snapshot.eventId));
-
-    try {
-      await cancelMeetingApi(selectedThreadId);
-      showUndo("Meeting cancelled — attendees notified", () => undefined);
-    } catch (error) {
-      setThreadMeetings((prev) => [...prev, snapshot]);
-      if (snapshotEvent) {
-        setCalendarEvents((prev) => [...prev, snapshotEvent]);
-      }
-      showUndo(
-        error instanceof Error ? error.message : "Could not cancel meeting",
-        () => undefined
-      );
-    }
-  }, [selectedLinkedEvent, selectedLinkedMeeting, selectedThreadId, showUndo]);
-
   const handleComposerSend = useCallback(
     async (bodyHtml: string) => {
       if (!selectedThread) return;
@@ -745,6 +780,173 @@ export function InboxShell({
     [selectedThread, userEmail, addActivity, showUndo]
   );
 
+  const selectThread = useCallback(
+    (threadId: string) => {
+      setSelectedThreadId(threadId);
+      if (isMobile) setMobileThreadOpen(true);
+    },
+    [isMobile]
+  );
+
+  const quickSnoozeThread = useCallback((threadId: string) => {
+    setSelectedThreadId(threadId);
+    setSnoozeOpen(true);
+  }, []);
+
+  const handleLongPressThread = useCallback((threadId: string) => {
+    setMultiSelectMode(true);
+    setSelectedIds(new Set([threadId]));
+  }, []);
+
+  const renderListPanel = (touchEnabled: boolean) => (
+    <aside className="flex h-full flex-col overflow-hidden">
+      <div className="flex border-b border-border">
+        {ACTIVE_LANES.map((lane) => (
+          <button
+            key={lane}
+            type="button"
+            onClick={() => setActiveLane(lane)}
+            className={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors ${
+              activeLane === lane
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {laneLabels[lane]}
+            <span className="ml-1 text-muted-foreground">({laneCounts[lane]})</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="border-b border-border px-3 py-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={threadSearch}
+            onChange={(e) => setThreadSearch(e.target.value)}
+            placeholder="Filter threads…"
+            className="h-8 border-border/60 bg-secondary/30 pl-8 text-xs"
+          />
+        </div>
+      </div>
+
+      {multiSelectMode && (
+        <div className="flex items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2">
+          <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => {
+              selectedIds.forEach((id) => archiveThread(id));
+              setSelectedIds(new Set());
+              setMultiSelectMode(false);
+            }}
+          >
+            Archive
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setSnoozeOpen(true)}
+          >
+            Snooze
+          </Button>
+        </div>
+      )}
+
+      <ScrollArea className="flex-1">
+        <ThreadList
+          lane={activeLane}
+          threads={filteredLaneThreads}
+          classifications={classificationMap}
+          threadMeetings={threadMeetingsMap}
+          rsvpByThread={rsvpByThread}
+          selectedThreadId={selectedThreadId}
+          multiSelectMode={multiSelectMode}
+          selectedIds={selectedIds}
+          onSelectThread={selectThread}
+          onToggleSelect={(id) => {
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
+          touchEnabled={touchEnabled}
+          onArchiveThread={archiveThread}
+          onSnoozeThread={quickSnoozeThread}
+          onLongPressThread={handleLongPressThread}
+        />
+      </ScrollArea>
+    </aside>
+  );
+
+  const renderThreadPanel = (onBack?: () => void) => (
+    <main className="flex h-full min-w-0 flex-col overflow-hidden">
+      {onBack && (
+        <div className="flex shrink-0 items-center border-b border-border px-2 py-1.5">
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onBack}>
+            ← Back
+          </Button>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <ThreadView
+          thread={selectedThread}
+          modLabel={modLabel}
+          linkedMeeting={selectedLinkedMeeting}
+          linkedEvent={selectedLinkedEvent}
+          rsvpSummary={selectedRsvpSummary}
+          availabilityOpen={availabilityOpen}
+          availabilityMode={availabilityMode}
+          schedulingIntent={selectedClassification?.schedulingIntent ?? null}
+          freeSlots={freeSlots}
+          meetingAttendees={meetingAttendees}
+          onReply={openReplyComposer}
+          onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
+          onSchedule={openScheduleMeeting}
+          onSnooze={openSnooze}
+          onCloseAvailability={() => setAvailabilityOpen(false)}
+          onSelectSlot={(slot) => {
+            void handleMeetingSlot(slot);
+          }}
+          onRescheduleMeeting={() => {
+            setAvailabilityMode("reschedule");
+            setAvailabilityOpen(true);
+          }}
+          onCancelMeeting={() => {
+            void handleCancelMeeting();
+          }}
+        />
+      </div>
+      <ComposerPanel
+        open={composerOpen}
+        subject={selectedThread?.subject ?? ""}
+        modLabel={modLabel}
+        initialContent={composerDraft}
+        loading={draftLoading}
+        onClose={closeComposer}
+        onSend={handleComposerSend}
+        onToneChange={(tone) => {
+          if (!selectedThreadId) return;
+          setDraftLoading(true);
+          void generateDraftApi(selectedThreadId, tone)
+            .then((result) => {
+              setComposerDraft(result.draftHtml);
+              if (result.source === "template") {
+                showUndo("AI quota exhausted — template draft inserted", () => undefined);
+              }
+            })
+            .finally(() => setDraftLoading(false));
+        }}
+        onSendLater={handleSendLater}
+      />
+    </main>
+  );
+
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background">
@@ -793,7 +995,7 @@ export function InboxShell({
               <Keyboard className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Shortcuts</span>
               <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">
-                ⇧/
+                ?
               </kbd>
             </Button>
             <Button
@@ -811,155 +1013,27 @@ export function InboxShell({
           </div>
         </header>
 
-        <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div className="relative min-h-0 flex-1 overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <div className="absolute inset-0 hidden lg:block">
         <Group
           orientation="horizontal"
-          className="absolute inset-0 h-full w-full"
+          className="h-full w-full"
           defaultLayout={savedLayout ?? DEFAULT_LAYOUT}
           onLayoutChanged={onLayoutChanged}
           resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
         >
-          {/* Left: lanes + thread list */}
           <Panel id="list" defaultSize="22%" minSize="15%" maxSize="40%" className="min-w-0">
-            <aside className="flex h-full flex-col overflow-hidden">
-              <div className="flex border-b border-border">
-                {ACTIVE_LANES.map((lane) => (
-                  <button
-                    key={lane}
-                    type="button"
-                    onClick={() => setActiveLane(lane)}
-                    className={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors ${
-                      activeLane === lane
-                        ? "border-b-2 border-primary text-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {laneLabels[lane]}
-                    <span className="ml-1 text-muted-foreground">({laneCounts[lane]})</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="border-b border-border px-3 py-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={threadSearch}
-                    onChange={(e) => setThreadSearch(e.target.value)}
-                    placeholder="Filter threads…"
-                    className="h-8 border-border/60 bg-secondary/30 pl-8 text-xs"
-                  />
-                </div>
-              </div>
-
-              {multiSelectMode && (
-                <div className="flex items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2">
-                  <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      selectedIds.forEach((id) => archiveThread(id));
-                      setSelectedIds(new Set());
-                      setMultiSelectMode(false);
-                    }}
-                  >
-                    Archive
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setSnoozeOpen(true)}
-                  >
-                    Snooze
-                  </Button>
-                </div>
-              )}
-
-              <ScrollArea className="flex-1">
-                <ThreadList
-                  lane={activeLane}
-                  threads={filteredLaneThreads}
-                  classifications={classificationMap}
-                  threadMeetings={threadMeetingsMap}
-                  rsvpByThread={rsvpByThread}
-                  selectedThreadId={selectedThreadId}
-                  multiSelectMode={multiSelectMode}
-                  selectedIds={selectedIds}
-                  onSelectThread={setSelectedThreadId}
-                  onToggleSelect={(id) => {
-                    setSelectedIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(id)) next.delete(id);
-                      else next.add(id);
-                      return next;
-                    });
-                  }}
-                />
-              </ScrollArea>
-            </aside>
+            {renderListPanel(false)}
           </Panel>
 
           <ResizeHandle />
 
-          {/* Center: thread view + composer */}
           <Panel id="main" defaultSize="48%" minSize="30%" className="min-w-0">
-            <main className="flex h-full min-w-0 flex-col overflow-hidden">
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <ThreadView
-                  thread={selectedThread}
-                  modLabel={modLabel}
-                  linkedMeeting={selectedLinkedMeeting}
-                  linkedEvent={selectedLinkedEvent}
-                  rsvpSummary={selectedRsvpSummary}
-                  availabilityOpen={availabilityOpen}
-                  availabilityMode={availabilityMode}
-                  schedulingIntent={selectedClassification?.schedulingIntent ?? null}
-                  freeSlots={freeSlots}
-                  meetingAttendees={meetingAttendees}
-                  onReply={openReplyComposer}
-                  onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
-                  onSchedule={openScheduleMeeting}
-                  onSnooze={openSnooze}
-                  onCloseAvailability={() => setAvailabilityOpen(false)}
-                  onSelectSlot={(slot) => {
-                    void handleMeetingSlot(slot);
-                  }}
-                  onRescheduleMeeting={() => {
-                    setAvailabilityMode("reschedule");
-                    setAvailabilityOpen(true);
-                  }}
-                  onCancelMeeting={() => {
-                    void handleCancelMeeting();
-                  }}
-                />
-              </div>
-              <ComposerPanel
-                open={composerOpen}
-                subject={selectedThread?.subject ?? ""}
-                modLabel={modLabel}
-                initialContent={composerDraft}
-                loading={draftLoading}
-                onClose={closeComposer}
-                onSend={handleComposerSend}
-                onToneChange={(tone) => {
-                  if (!selectedThreadId) return;
-                  setDraftLoading(true);
-                  void generateDraftApi(selectedThreadId, tone)
-                    .then((result) => setComposerDraft(result.draftHtml))
-                    .catch(() => undefined)
-                    .finally(() => setDraftLoading(false));
-                }}
-                onSendLater={handleSendLater}
-              />
-            </main>
+            {renderThreadPanel()}
           </Panel>
 
           <ResizeHandle />
 
-          {/* Right: resizable agent + calendar */}
           <Panel id="sidebar" defaultSize="30%" minSize="20%" maxSize="45%" className="min-w-0">
             <Group
               orientation="vertical"
@@ -988,6 +1062,25 @@ export function InboxShell({
             </Group>
           </Panel>
         </Group>
+        </div>
+
+        <div className="flex h-full flex-col lg:hidden">
+          {mobileTab === "inbox" && !mobileThreadOpen && renderListPanel(true)}
+          {mobileTab === "inbox" && mobileThreadOpen && renderThreadPanel(() => setMobileThreadOpen(false))}
+          {mobileTab === "calendar" && (
+            <CalendarPanel
+              events={calendarEvents}
+              searchQuery={calendarSearch}
+              onSearchChange={setCalendarSearch}
+              onDefrag={() =>
+                showUndo("Defrag view coming soon", () => {
+                  /* noop */
+                })
+              }
+            />
+          )}
+          {mobileTab === "agent" && <AgentChatPanel />}
+        </div>
         </div>
 
         <ActivityBar
@@ -1041,7 +1134,26 @@ export function InboxShell({
             }
           }}
         />
+        <AdvancedSearchOverlay
+          open={advancedSearchOpen}
+          onOpenChange={setAdvancedSearchOpen}
+          onSelectThread={(threadId) => {
+            setSelectedThreadId(threadId);
+            const lane = classifications.find((c) => c.threadId === threadId)?.lane;
+            if (lane && lane !== "done") {
+              setActiveLane(lane);
+            }
+          }}
+        />
         <UndoToast undo={undo} onDismiss={() => setUndo(null)} />
+        <MobileTabBar
+          active={mobileTab}
+          onChange={(tab) => {
+            setMobileTab(tab);
+            setMobileThreadOpen(false);
+          }}
+        />
+        <MobileCommandFab modLabel={modLabel} onOpenPalette={() => setPaletteOpen(true)} />
       </div>
     </TooltipProvider>
   );

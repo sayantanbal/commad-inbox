@@ -5,6 +5,8 @@ import { Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AiProviderSelect } from "@/components/inbox/ai-provider-select";
+import { useAiProvider } from "@/hooks/use-ai-provider";
 import type { SearchHit } from "@/lib/search/semantic";
 
 interface SearchOverlayProps {
@@ -18,6 +20,7 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
   const [results, setResults] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { provider, setProvider } = useAiProvider();
 
   useEffect(() => {
     if (!open) {
@@ -42,7 +45,7 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
         const response = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: q }),
+          body: JSON.stringify({ query: q, provider }),
         });
         if (!response.ok) {
           throw new Error("Search failed");
@@ -58,7 +61,7 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, provider]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,6 +73,12 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
           </DialogTitle>
         </DialogHeader>
         <div className="border-b border-border px-4 py-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <AiProviderSelect value={provider} onChange={setProvider} />
+            <span className="text-[10px] text-muted-foreground">
+              Switching re-indexes search in the background
+            </span>
+          </div>
           <Input
             autoFocus
             placeholder="Search your inbox…"

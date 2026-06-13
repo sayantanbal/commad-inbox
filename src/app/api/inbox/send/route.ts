@@ -1,26 +1,17 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { cancelQueuedSend, dispatchScheduledSend, queueSend } from "@/lib/inbox/scheduled-sends";
+import { scheduledSendIdBodySchema, sendBodySchema } from "@/lib/schemas/api";
 
 const UNDO_WINDOW_MS = 5000;
-
-const sendSchema = z.object({
-  to: z.array(z.string().email()).min(1),
-  subject: z.string().min(1),
-  body: z.string().min(1),
-  threadId: z.string().optional(),
-  sendAt: z.string().datetime().optional(),
-});
 
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const parsed = sendSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, sendBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   const sendAt = parsed.data.sendAt
     ? new Date(parsed.data.sendAt)
@@ -41,18 +32,12 @@ export async function POST(request: Request) {
   });
 }
 
-const dispatchSchema = z.object({
-  scheduledSendId: z.string().min(1),
-});
-
 export async function PUT(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const parsed = dispatchSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, scheduledSendIdBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   try {
     const result = await dispatchScheduledSend(
@@ -71,18 +56,12 @@ export async function PUT(request: Request) {
   }
 }
 
-const cancelSchema = z.object({
-  scheduledSendId: z.string().min(1),
-});
-
 export async function DELETE(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const parsed = cancelSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, scheduledSendIdBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   const cancelled = await cancelQueuedSend(auth.userId, parsed.data.scheduledSendId);
   return NextResponse.json({ success: cancelled });

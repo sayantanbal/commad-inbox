@@ -29,6 +29,13 @@
       "when": 1781192000000,
       "tag": "0003_thread_meetings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781196000000,
+      "tag": "0004_embedding_provider",
+      "breakpoints": true
     }
   ]
 }

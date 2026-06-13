@@ -1,5 +1,6 @@
-export type TriageLane = "reply" | "schedule" | "fyi" | "done";
-export type Priority = "high" | "medium" | "low";
+import type { DraftTone, Priority, TriageLane } from "@/lib/schemas/domain";
+
+export type { DraftTone, Priority, TriageLane };
 
 export interface Participant {
   name: string;
@@ -77,10 +78,14 @@ export interface CalendarEvent {
 export type ShortcutContext = "global" | "list" | "thread" | "composer";
 
 export interface Shortcut {
+  id: string;
   key: string;
   mod?: boolean;
   shift?: boolean;
   context: ShortcutContext;
   action: string;
   description: string;
+  /** Shown in palette but not bound to a key */
+  paletteOnly?: boolean;
+  requiresThread?: boolean;
 }

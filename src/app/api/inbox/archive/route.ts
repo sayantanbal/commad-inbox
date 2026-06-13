@@ -1,21 +1,16 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { archiveGmailThread } from "@/lib/corsair/actions";
 import { setThreadLane } from "@/lib/inbox/classification-lane";
-
-const bodySchema = z.object({
-  threadId: z.string().min(1),
-});
+import { archiveBodySchema } from "@/lib/schemas/api";
 
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const parsed = bodySchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, archiveBodySchema);
+  if (!parsed.ok) return parsed.response;
 
   const { threadId } = parsed.data;
 

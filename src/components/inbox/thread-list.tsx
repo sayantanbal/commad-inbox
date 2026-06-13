@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { CheckSquare, Square } from "lucide-react";
 import { PriorityBadge } from "@/components/inbox/priority-badge";
 import { RsvpChip } from "@/components/inbox/rsvp-chip";
+import { SwipeableThreadRow } from "@/components/inbox/swipeable-thread-row";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { RsvpSummary } from "@/lib/inbox/rsvp";
 import type { Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
@@ -27,6 +28,10 @@ interface ThreadListProps {
   selectedIds: Set<string>;
   onSelectThread: (threadId: string) => void;
   onToggleSelect: (threadId: string) => void;
+  touchEnabled?: boolean;
+  onArchiveThread?: (threadId: string) => void;
+  onSnoozeThread?: (threadId: string) => void;
+  onLongPressThread?: (threadId: string) => void;
 }
 
 export function ThreadList({
@@ -40,6 +45,10 @@ export function ThreadList({
   selectedIds,
   onSelectThread,
   onToggleSelect,
+  touchEnabled = false,
+  onArchiveThread,
+  onSnoozeThread,
+  onLongPressThread,
 }: ThreadListProps) {
   if (threads.length === 0) {
     return (
@@ -64,14 +73,11 @@ export function ThreadList({
         const sender = classification?.sender ?? thread.participants[0]?.name ?? "Unknown";
         const timeLabel = formatRelativeTime(thread.timestamp);
 
-        return (
-          <motion.button
-            key={thread.id}
-            type="button"
+        const row = (
+          <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.03, duration: 0.2 }}
-            onClick={() => (multiSelectMode ? onToggleSelect(thread.id) : onSelectThread(thread.id))}
             className={cn(
               "group grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 border-b border-border/60 px-3 py-2.5 text-left transition-colors",
               multiSelectMode && "grid-cols-[auto_minmax(0,1fr)_auto]",
@@ -146,7 +152,30 @@ export function ThreadList({
                 {rsvp && <RsvpChip summary={rsvp} />}
               </div>
             )}
-          </motion.button>
+          </motion.div>
+        );
+
+        if (touchEnabled && !multiSelectMode) {
+          return (
+            <SwipeableThreadRow
+              key={thread.id}
+              onClick={() => onSelectThread(thread.id)}
+              onSwipeRight={() => onArchiveThread?.(thread.id)}
+              onSwipeLeft={() => onSnoozeThread?.(thread.id)}
+              onLongPress={() => onLongPressThread?.(thread.id)}
+            >
+              {row}
+            </SwipeableThreadRow>
+          );
+        }
+
+        return (
+          <div
+            key={thread.id}
+            onClick={() => (multiSelectMode ? onToggleSelect(thread.id) : onSelectThread(thread.id))}
+          >
+            {row}
+          </div>
         );
       })}
     </div>

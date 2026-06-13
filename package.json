@@ -16,9 +16,14 @@
     "phase0": "bun run db:migrate && bun run corsair:setup && bun run smoke:corsair"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.82",
+    "@ai-sdk/mcp": "^1.0.50",
+    "@ai-sdk/openai": "^3.0.71",
+    "@ai-sdk/react": "^3.0.206",
     "@better-auth/infra": "^0.2.14",
     "@corsair-dev/gmail": "^0.1.4",
     "@corsair-dev/googlecalendar": "0.1.4",
+    "@corsair-dev/mcp": "^0.1.22",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-scroll-area": "^1.2.9",
     "@radix-ui/react-separator": "^1.1.7",
@@ -29,6 +34,7 @@
     "@tiptap/pm": "^2.14.0",
     "@tiptap/react": "^2.14.0",
     "@tiptap/starter-kit": "^2.14.0",
+    "ai": "^6.0.204",
     "better-auth": "^1.6.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -47,6 +53,7 @@
     "react-dom": "^19.1.0",
     "react-hotkeys-hook": "^5.1.0",
     "react-resizable-panels": "^4.11.2",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.4.3"
   },

@@ -15,6 +15,22 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Command Inbox",
   description: "Keyboard-first email and calendar command center",
+  applicationName: "Command Inbox",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Command Inbox",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+  themeColor: "#09090b",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

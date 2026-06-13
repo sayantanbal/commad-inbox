@@ -15,6 +15,18 @@ export type InboxRealtimeEvent =
     }
   | {
       type: "backfill-complete";
+    }
+  | {
+      type: "reembed-progress";
+      provider: "gemini" | "openai";
+      completed: number;
+      total: number;
+    }
+  | {
+      type: "reembed-complete";
+      provider: "gemini" | "openai";
+      total: number;
+      completed?: number;
     };
 
 let server: Pusher | null = null;

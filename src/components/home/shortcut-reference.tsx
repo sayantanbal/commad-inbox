@@ -34,7 +34,7 @@ export function ShortcutReference() {
               <dl className="space-y-2.5">
                 {shortcuts.map((shortcut) => (
                   <div
-                    key={`${context}-${shortcut.action}`}
+                    key={shortcut.id}
                     className="flex items-center justify-between gap-3 text-sm"
                   >
                     <dt className="text-muted-foreground">{shortcut.description}</dt>
@@ -53,11 +53,7 @@ export function ShortcutReference() {
       <p className="mt-6 text-sm text-muted-foreground">
         Open the full cheat sheet in the inbox with{" "}
         <kbd className="rounded-md border border-border bg-secondary px-1.5 py-0.5 font-mono text-foreground">
-          Shift
-        </kbd>
-        {" + "}
-        <kbd className="rounded-md border border-border bg-secondary px-1.5 py-0.5 font-mono text-foreground">
-          /
+          ?
         </kbd>
       </p>
     </section>
