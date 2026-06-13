@@ -16,11 +16,13 @@ function isAuthError(error: unknown): boolean {
 function toParticipant(input?: {
   email?: string;
   displayName?: string;
+  responseStatus?: "needsAction" | "declined" | "tentative" | "accepted";
 }): Participant {
   const email = input?.email ?? "unknown@unknown";
   return {
     email,
     name: input?.displayName?.trim() || email,
+    responseStatus: input?.responseStatus,
   };
 }
 
@@ -59,7 +61,13 @@ export async function fetchEventsForTenant(
         summary: item.summary ?? "(No title)",
         start,
         end,
-        attendees: (item.attendees ?? []).map((attendee) => toParticipant(attendee)),
+        attendees: (item.attendees ?? []).map((attendee) =>
+          toParticipant({
+            email: attendee.email,
+            displayName: attendee.displayName,
+            responseStatus: attendee.responseStatus,
+          })
+        ),
         location: item.location,
         description: item.description,
         organizer: toParticipant(item.organizer ?? item.creator),

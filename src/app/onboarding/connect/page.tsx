@@ -28,19 +28,19 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
   const error = params.error;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card/40 p-8 backdrop-blur-sm">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-parchment px-6">
+      <div className="w-full max-w-lg rounded-lg border border-border bg-card p-8 shadow-[0_12px_48px_-16px_rgba(0,0,0,0.18)]">
+        <p className="text-[15px] font-semibold tracking-tight text-primary">
           One-time setup
         </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Connect Google</h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        <h1 className="mt-3 text-2xl font-semibold tracking-[-0.022em]">Connect Google</h1>
+        <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
           We&apos;ll request Gmail and Calendar access back-to-back so your inbox can load real
           threads and events.
         </p>
 
         {showReconnect ? (
-          <p className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Your Google connection expired. Reconnect to continue.
           </p>
         ) : null}

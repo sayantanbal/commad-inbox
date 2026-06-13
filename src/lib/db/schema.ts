@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   json,
   pgEnum,
   pgTable,
@@ -107,6 +108,22 @@ export const scheduledSends = pgTable(
   (table) => [index("scheduled_sends_time_idx").on(table.status, table.sendAt)]
 );
 
+export const threadMeetings = pgTable(
+  "thread_meetings",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    eventId: text("event_id").notNull(),
+    slotStart: timestamp("slot_start", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("thread_meetings_user_thread_idx").on(table.userId, table.threadId)]
+);
+
 export const webhookLogs = pgTable("webhook_logs", {
   id: text("id").primaryKey(),
   userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
@@ -122,4 +139,5 @@ export const usersRelations = relations(users, ({ many }) => ({
   snoozes: many(snoozes),
   drafts: many(drafts),
   scheduledSends: many(scheduledSends),
+  threadMeetings: many(threadMeetings),
 }));

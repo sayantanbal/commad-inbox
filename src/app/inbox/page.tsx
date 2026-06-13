@@ -11,6 +11,8 @@ import { isBackfillComplete } from "@/lib/users/backfill-status";
 import { fetchEventsForTenant } from "@/lib/corsair/events";
 import { fetchThreadsForTenant } from "@/lib/corsair/threads";
 import { requireConnectedTenant } from "@/lib/corsair/tenant";
+import { getSnoozesForUser } from "@/lib/inbox/snoozes";
+import { getThreadMeetingsForUser } from "@/lib/inbox/thread-meetings";
 import { serializeInboxData } from "@/lib/inbox-serialize";
 import { InboxClient } from "./inbox-client";
 
@@ -26,27 +28,37 @@ function isAuthError(error: unknown): boolean {
 }
 
 export default async function InboxPage() {
-  const { tenant, userId } = await requireConnectedTenant();
+  const { tenant, userId, userEmail } = await requireConnectedTenant();
 
   try {
-    const [threads, storedClassifications, events, backfillComplete] = await Promise.all([
+    const [threads, storedClassifications, events, backfillComplete, snoozes, threadMeetings] =
+      await Promise.all([
       fetchThreadsForTenant(tenant),
       getClassificationsForUser(userId),
       fetchEventsForTenant(tenant),
       isBackfillComplete(userId),
+      getSnoozesForUser(userId),
+      getThreadMeetingsForUser(userId),
     ]);
 
     if (!backfillComplete) {
       triggerInboxBackfill(userId);
     }
 
-    const classifications = withDefaultClassifications(threads, storedClassifications, {
-      backfillComplete,
-    });
-    const data = serializeInboxData({ threads, classifications, events });
+    const classifications = withDefaultClassifications(threads, storedClassifications);
+    const data = serializeInboxData({ threads, classifications, events, threadMeetings });
 
     return (
-      <InboxClient initialData={data} userId={userId} backfillComplete={backfillComplete} />
+      <InboxClient
+        initialData={data}
+        userId={userId}
+        userEmail={userEmail}
+        backfillComplete={backfillComplete}
+        initialSnoozes={snoozes.map((snooze) => ({
+          threadId: snooze.threadId,
+          until: snooze.until.toISOString(),
+        }))}
+      />
     );
   } catch (error) {
     if (isAuthError(error)) {

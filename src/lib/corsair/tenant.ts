@@ -22,6 +22,7 @@ export async function requireConnectedTenant() {
     session,
     tenant: corsair.withTenant(session.user.id),
     userId: session.user.id,
+    userEmail: session.user.email,
   };
 }
 

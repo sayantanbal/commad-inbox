@@ -85,7 +85,7 @@ export function CalendarPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden font-serif">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -184,7 +184,7 @@ export function CalendarPanel({
             {WEEKDAYS.map((label, i) => (
               <span
                 key={label}
-                className={cn(i === 0 || i === 6 ? "text-destructive/90" : "text-muted-foreground")}
+                className={cn(i === 0 || i === 6 ? "text-muted-foreground/70" : "text-muted-foreground")}
               >
                 {label}
               </span>
@@ -207,14 +207,14 @@ export function CalendarPanel({
                   className={cn(
                     "flex min-h-0 flex-col items-center justify-center rounded-sm px-0.5 py-0.5 text-[10px] leading-none transition-colors",
                     !inMonth && "text-muted-foreground/35",
-                    inMonth && day.isWeekend && "text-destructive/85",
+                    inMonth && day.isWeekend && "text-muted-foreground",
                     inMonth && !day.isWeekend && "text-foreground",
-                    isSelected && "bg-primary/20 ring-1 ring-primary/40",
-                    isToday && !isSelected && "bg-amber-500/15 ring-1 ring-amber-500/30",
-                    !isSelected && !isToday && "hover:bg-accent/50"
+                    isSelected && "bg-primary/15 ring-1 ring-primary/40",
+                    isToday && !isSelected && "bg-primary/8 ring-1 ring-primary/25",
+                    !isSelected && !isToday && "hover:bg-accent"
                   )}
                 >
-                  <span className={cn("font-semibold", isToday && "text-amber-200")}>
+                  <span className={cn("font-semibold", isToday && "text-primary")}>
                     {day.dayOfMonth}
                   </span>
                   {dayEvents.length > 0 && (
@@ -225,7 +225,7 @@ export function CalendarPanel({
                             key={e.id}
                             className={cn(
                               "h-1 w-1 rounded-full",
-                              e.status === "tentative" ? "bg-destructive" : "bg-foreground/70"
+                              e.status === "tentative" ? "bg-amber-500" : "bg-foreground/60"
                             )}
                           />
                         ))

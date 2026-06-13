@@ -1,28 +1,48 @@
 @import "tailwindcss";
 
+/*
+  Command Inbox — light "Apple-tight" system (see DESIGN.md).
+  One brand/interactive accent: Action Blue. Status colors (red/green/amber)
+  are functional only — never decoration.
+*/
 @theme inline {
-  --color-background: #0a0e14;
-  --color-foreground: #e8edf4;
-  --color-card: #121820;
-  --color-card-foreground: #e8edf4;
-  --color-popover: #161d28;
-  --color-popover-foreground: #e8edf4;
-  --color-primary: #2dd4bf;
-  --color-primary-foreground: #042f2e;
-  --color-secondary: #1a2332;
-  --color-secondary-foreground: #c5d0de;
-  --color-muted: #1a2332;
-  --color-muted-foreground: #7b8ba3;
-  --color-accent: #1e2a3a;
-  --color-accent-foreground: #e8edf4;
-  --color-destructive: #f87171;
-  --color-border: #243044;
-  --color-input: #1a2332;
-  --color-ring: #2dd4bf;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --font-sans: var(--font-geist-sans);
+  /* Surfaces */
+  --color-background: #ffffff;
+  --color-foreground: #1d1d1f;
+  --color-card: #ffffff;
+  --color-card-foreground: #1d1d1f;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1d1d1f;
+
+  /* Single brand accent — Action Blue */
+  --color-primary: #0066cc;
+  --color-primary-foreground: #ffffff;
+
+  /* Quiet neutral surfaces (parchment / pearl) */
+  --color-secondary: #f5f5f7;
+  --color-secondary-foreground: #1d1d1f;
+  --color-muted: #f5f5f7;
+  --color-muted-foreground: #6e6e73;
+  --color-accent: #f5f5f7;
+  --color-accent-foreground: #1d1d1f;
+
+  /* Functional status — used for state, not decoration */
+  --color-destructive: #d70015;
+  --color-success: #248a3d;
+  --color-warning: #9a6700;
+
+  /* Hairlines */
+  --color-border: #e0e0e0;
+  --color-input: #ffffff;
+  --color-ring: #0071e3;
+
+  /* Apple radii grammar: sm 8 · md 11 · lg 18 */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.6875rem;
+  --radius-lg: 1.125rem;
+
+  /* system-ui / SF Pro first (real SF Pro on Apple platforms); Inter is the cross-platform substitute. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
@@ -33,14 +53,22 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "ss03" 1, "cv01" 1, "calt" 1;
+    /* Nudge tracking to recreate the SF Pro "tight" cadence with Inter. */
+    letter-spacing: -0.01em;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.022em;
   }
 
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  /* Resizable panel separators */
+  /* Resizable panel separators — hairline that warms to blue on interaction */
   [data-separator] {
     position: relative;
     z-index: 20;
@@ -54,7 +82,7 @@
   [data-separator]:hover,
   [data-separator]:focus-visible,
   [data-separator]:active {
-    background: color-mix(in srgb, var(--color-primary) 60%, var(--color-border));
+    background: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
   }
 
   .resize-handle-vertical[data-separator] {
@@ -71,5 +99,27 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+@layer utilities {
+  /* Parchment — the signature Apple off-white, for rhythm against pure white. */
+  .bg-parchment {
+    background-color: #f5f5f7;
+  }
+
+  /* Near-black editorial tile. */
+  .bg-tile-dark {
+    background-color: #1d1d1f;
+  }
+
+  /* The single drop-shadow in the system — product imagery resting on a surface. */
+  .product-shadow {
+    box-shadow: rgba(0, 0, 0, 0.22) 0 18px 60px -12px;
+  }
+
+  /* Sky Link Blue — inline links / accents on dark tiles only. */
+  .text-on-dark-link {
+    color: #2997ff;
   }
 }

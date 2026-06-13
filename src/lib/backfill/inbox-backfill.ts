@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { isGeminiQuotaError } from "@/lib/ai/gemini";
 import { classifyThreadForUser } from "@/lib/classifier/persist";
 import { corsair } from "@/lib/corsair";
 import { db } from "@/lib/db";
@@ -31,11 +32,17 @@ export async function runInboxBackfill(userId: string): Promise<void> {
   const toProcess = threadIds.filter((id) => !existingIds.has(id));
   const total = toProcess.length;
   let completed = 0;
+  let quotaExhausted = false;
 
   for (const threadId of toProcess) {
     try {
       await classifyThreadForUser(userId, tenant, threadId);
     } catch (error) {
+      if (isGeminiQuotaError(error)) {
+        quotaExhausted = true;
+        console.warn("[backfill] Gemini quota exhausted — pausing backfill");
+        break;
+      }
       console.error("[backfill] thread failed", threadId, error);
     }
     completed += 1;
@@ -45,6 +52,21 @@ export async function runInboxBackfill(userId: string): Promise<void> {
       total,
     });
     await sleep(400);
+  }
+
+  if (quotaExhausted) {
+    return;
+  }
+
+  const remaining = await db
+    .select({ threadId: classifications.threadId })
+    .from(classifications)
+    .where(eq(classifications.userId, userId));
+  const classifiedIds = new Set(remaining.map((row) => row.threadId));
+  const allDone = toProcess.every((id) => classifiedIds.has(id));
+
+  if (!allDone && toProcess.length > 0) {
+    return;
   }
 
   await db

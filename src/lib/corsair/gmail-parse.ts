@@ -1,3 +1,6 @@
+import {
+  htmlToPlainText,
+} from "@/lib/gmail/email-html";
 import type { Attachment, Message, Participant, Thread } from "@/lib/types";
 
 type MessagePartHeader = { name?: string; value?: string };
@@ -48,30 +51,51 @@ function decodeBody(data?: string): string {
   }
 }
 
-function extractBody(payload?: MessagePartShape): string {
-  if (!payload) return "";
+function extractBodies(payload?: MessagePartShape): { plain: string; html: string | null } {
+  if (!payload) return { plain: "", html: null };
 
-  if (payload.body?.data) {
-    return decodeBody(payload.body.data);
+  let html: string | null = null;
+  let plain: string | null = null;
+
+  function walk(part: MessagePartShape) {
+    if (part.parts?.length) {
+      for (const child of part.parts) {
+        walk(child);
+      }
+      return;
+    }
+
+    const mime = part.mimeType ?? "";
+
+    if (mime === "text/html" && part.body?.data) {
+      html ??= decodeBody(part.body.data);
+      return;
+    }
+    if (mime === "text/plain" && part.body?.data) {
+      plain ??= decodeBody(part.body.data);
+      return;
+    }
+
+    if (part.body?.data) {
+      const raw = decodeBody(part.body.data);
+      if (raw.trimStart().startsWith("<")) {
+        html ??= raw;
+      } else {
+        plain ??= raw;
+      }
+    }
   }
 
-  const parts = payload.parts ?? [];
-  const plain = parts.find((part) => part.mimeType === "text/plain");
-  if (plain?.body?.data) {
-    return decodeBody(plain.body.data);
+  walk(payload);
+
+  if (html && !plain) {
+    plain = htmlToPlainText(html);
   }
 
-  const html = parts.find((part) => part.mimeType === "text/html");
-  if (html?.body?.data) {
-    return decodeBody(html.body.data).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  }
-
-  for (const part of parts) {
-    const nested = extractBody(part);
-    if (nested) return nested;
-  }
-
-  return "";
+  return {
+    plain: plain ?? "",
+    html,
+  };
 }
 
 function extractAttachments(payload?: MessagePartShape): Attachment[] {
@@ -112,11 +136,14 @@ function mapMessage(message: GmailMessage): Message {
     .filter(Boolean)
     .map(parseEmailAddress);
 
+  const { plain, html } = extractBodies(message.payload);
+
   return {
     id: message.id ?? crypto.randomUUID(),
     from: parseEmailAddress(fromRaw),
     to,
-    body: extractBody(message.payload) || message.snippet || "",
+    body: plain || message.snippet || "",
+    bodyHtml: html,
     timestamp: toTimestamp(message.internalDate),
     attachments: extractAttachments(message.payload),
   };

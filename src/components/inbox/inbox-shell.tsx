@@ -9,7 +9,6 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import { ActivityBar } from "@/components/inbox/activity-bar";
 import { AgentChatPanel } from "@/components/inbox/agent-chat-panel";
-import { AvailabilityPicker } from "@/components/inbox/availability-picker";
 import { CalendarPanel } from "@/components/inbox/calendar-panel";
 import { CommandPalette } from "@/components/inbox/command-palette";
 import { ComposerPanel } from "@/components/inbox/composer-panel";
@@ -24,12 +23,28 @@ import { ResizeHandle } from "@/components/ui/resize-handle";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ActivityItem } from "@/lib/activity";
+import { computeFreeSlots } from "@/lib/calendar/free-slots";
+import {
+  archiveThreadApi,
+  cancelMeetingApi,
+  cancelSendApi,
+  createMeetingApi,
+  dispatchSendApi,
+  generateDraftApi,
+  queueSendApi,
+  restoreThreadApi,
+  snoozeThreadApi,
+  unsnoozeThreadApi,
+  updateMeetingApi,
+} from "@/lib/inbox/client-api";
+import { replyRecipients, resolveMeetingAttendees } from "@/lib/inbox/recipients";
+import { summarizeRsvp } from "@/lib/inbox/rsvp";
 import { getModLabel } from "@/lib/shortcuts";
 import { SearchOverlay } from "@/components/inbox/search-overlay";
 import { useInboxRealtime } from "@/hooks/use-inbox-realtime";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
 import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
-import type { CalendarEvent, Classification, Thread, TriageLane } from "@/lib/types";
+import type { CalendarEvent, Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
 
 const ACTIVE_LANES: TriageLane[] = ["reply", "schedule", "fyi"];
 const LAYOUT_ID = "command-inbox-v2";
@@ -66,8 +81,11 @@ interface InboxShellProps {
   threads: Thread[];
   classifications: Classification[];
   events: CalendarEvent[];
+  threadMeetings: ThreadMeeting[];
   userId: string;
+  userEmail: string;
   backfillComplete: boolean;
+  initialSnoozes: Array<{ threadId: string; until: Date }>;
 }
 
 function initialLane(classifications: Classification[]): TriageLane {
@@ -87,9 +105,12 @@ function initialThreadId(threads: Thread[], classifications: Classification[], l
 export function InboxShell({
   threads,
   classifications: initialClassifications,
-  events,
+  events: initialEvents,
+  threadMeetings: initialThreadMeetings,
   userId,
+  userEmail,
   backfillComplete,
+  initialSnoozes,
 }: InboxShellProps) {
   const router = useRouter();
   const isMac = useIsMac();
@@ -108,7 +129,15 @@ export function InboxShell({
     });
 
   const [classifications, setClassifications] = useState(initialClassifications);
-  const [snoozed, setSnoozed] = useState<SnoozedThread[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState(initialEvents);
+  const [threadMeetings, setThreadMeetings] = useState(initialThreadMeetings);
+  const [snoozed, setSnoozed] = useState<SnoozedThread[]>(() =>
+    initialSnoozes.map((snooze) => ({
+      threadId: snooze.threadId,
+      until: snooze.until,
+      label: format(snooze.until, "EEE h:mm a"),
+    }))
+  );
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activeLane, setActiveLane] = useState<TriageLane>(startingLane);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() =>
@@ -123,7 +152,10 @@ export function InboxShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [composerDraft, setComposerDraft] = useState("");
+  const [draftLoading, setDraftLoading] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [availabilityMode, setAvailabilityMode] = useState<"create" | "reschedule">("create");
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [undo, setUndo] = useState<UndoState | null>(null);
@@ -159,6 +191,51 @@ export function InboxShell({
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
   const selectedClassification = selectedThreadId ? classificationMap.get(selectedThreadId) : undefined;
+
+  const threadMeetingsMap = useMemo(
+    () => new Map(threadMeetings.map((meeting) => [meeting.threadId, meeting])),
+    [threadMeetings]
+  );
+
+  const calendarEventsMap = useMemo(
+    () => new Map(calendarEvents.map((event) => [event.id, event])),
+    [calendarEvents]
+  );
+
+  const selectedLinkedMeeting = selectedThreadId
+    ? threadMeetingsMap.get(selectedThreadId) ?? null
+    : null;
+
+  const selectedLinkedEvent = selectedLinkedMeeting
+    ? calendarEventsMap.get(selectedLinkedMeeting.eventId) ?? null
+    : null;
+
+  const selectedRsvpSummary = useMemo(
+    () => summarizeRsvp(selectedLinkedEvent, userEmail),
+    [selectedLinkedEvent, userEmail]
+  );
+
+  const rsvpByThread = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof summarizeRsvp>>();
+    for (const meeting of threadMeetings) {
+      const event = calendarEventsMap.get(meeting.eventId) ?? null;
+      map.set(meeting.threadId, summarizeRsvp(event, userEmail));
+    }
+    return map;
+  }, [threadMeetings, calendarEventsMap, userEmail]);
+
+  const meetingAttendees = useMemo(() => {
+    if (!selectedThread) return [];
+    return resolveMeetingAttendees(
+      selectedThread,
+      selectedClassification?.schedulingIntent ?? null,
+      userEmail
+    );
+  }, [selectedThread, selectedClassification, userEmail]);
+
+  useEffect(() => {
+    setAvailabilityOpen(false);
+  }, [selectedThreadId]);
 
 
 
@@ -230,21 +307,27 @@ export function InboxShell({
   const archiveThread = useCallback(
     (threadId: string) => {
       const thread = threads.find((t) => t.id === threadId);
+      const previousLane = classificationMap.get(threadId)?.lane ?? "reply";
+
       setClassifications((prev) =>
         prev.map((c) => (c.threadId === threadId ? { ...c, lane: "done" as const } : c))
       );
       const next = laneThreads.find((t) => t.id !== threadId);
       if (selectedThreadId === threadId) setSelectedThreadId(next?.id ?? null);
 
-      showUndo(`Archived "${thread?.subject.slice(0, 40)}…"`, () => {
+      void archiveThreadApi(threadId).catch(() => {
         setClassifications((prev) =>
-          prev.map((c) =>
-            c.threadId === threadId
-              ? { ...c, lane: (classificationMap.get(threadId)?.lane ?? "reply") as TriageLane }
-              : c
-          )
+          prev.map((c) => (c.threadId === threadId ? { ...c, lane: previousLane } : c))
         );
         setSelectedThreadId(threadId);
+      });
+
+      showUndo(`Archived "${thread?.subject.slice(0, 40)}…"`, () => {
+        setClassifications((prev) =>
+          prev.map((c) => (c.threadId === threadId ? { ...c, lane: previousLane } : c))
+        );
+        setSelectedThreadId(threadId);
+        void restoreThreadApi(threadId, previousLane).catch(() => undefined);
       });
     },
     [threads, laneThreads, selectedThreadId, showUndo, classificationMap]
@@ -267,10 +350,16 @@ export function InboxShell({
         at: until,
       });
 
+      void snoozeThreadApi(threadId, until).catch(() => {
+        setSnoozed((prev) => prev.filter((s) => s.threadId !== threadId));
+        setSelectedThreadId(threadId);
+      });
+
       showUndo(`Snoozed until ${label}`, () => {
         setSnoozed((prev) => prev.filter((s) => s.threadId !== threadId));
         setActivities((prev) => prev.filter((a) => a.id !== activityId));
         setSelectedThreadId(threadId);
+        void unsnoozeThreadApi(threadId).catch(() => undefined);
       });
     },
     [threads, laneThreads, selectedThreadId, showUndo, addActivity]
@@ -291,6 +380,25 @@ export function InboxShell({
     [filteredLaneThreads, selectedThreadId]
   );
 
+  const openReplyComposer = useCallback(() => {
+    if (!selectedThreadId) return;
+    setComposerOpen(true);
+    setComposerDraft("<p></p>");
+    setDraftLoading(true);
+    void generateDraftApi(selectedThreadId, "professional")
+      .then((result) => setComposerDraft(result.draftHtml))
+      .catch(() => {
+        showUndo("AI draft unavailable — write your reply manually", () => undefined);
+      })
+      .finally(() => setDraftLoading(false));
+  }, [selectedThreadId, showUndo]);
+
+  const openScheduleMeeting = useCallback(() => {
+    if (!selectedThreadId) return;
+    setAvailabilityMode(threadMeetingsMap.has(selectedThreadId) ? "reschedule" : "create");
+    setAvailabilityOpen(true);
+  }, [selectedThreadId, threadMeetingsMap]);
+
   const handleAction = useCallback(
     (action: string) => {
       switch (action) {
@@ -304,10 +412,10 @@ export function InboxShell({
           if (selectedThreadId) archiveThread(selectedThreadId);
           break;
         case "reply":
-          setComposerOpen(true);
+          openReplyComposer();
           break;
         case "meeting":
-          setAvailabilityOpen(true);
+          openScheduleMeeting();
           break;
         case "snooze":
           openSnooze();
@@ -329,7 +437,7 @@ export function InboxShell({
           break;
       }
     },
-    [archiveThread, navigateThread, selectedThreadId, openSnooze]
+    [archiveThread, navigateThread, openScheduleMeeting, openSnooze, openReplyComposer, selectedThreadId]
   );
 
   useHotkeys("j", () => handleAction("nextThread"), { enabled: !composerOpen }, [handleAction, composerOpen]);
@@ -360,25 +468,234 @@ export function InboxShell({
     setPaletteOpen(true);
   });
   useHotkeys("shift+/", () => setCheatsheetOpen(true));
-  useHotkeys("escape", () => {
-    if (snoozeOpen) setSnoozeOpen(false);
-    else if (availabilityOpen) setAvailabilityOpen(false);
-    else if (composerOpen) setComposerOpen(false);
-    else if (cheatsheetOpen) setCheatsheetOpen(false);
-    else if (paletteOpen) setPaletteOpen(false);
-  });
+  const closeComposer = useCallback(() => {
+    setComposerOpen(false);
+    setComposerDraft("");
+  }, []);
+
+  useHotkeys(
+    "escape",
+    () => {
+      if (snoozeOpen) setSnoozeOpen(false);
+      else if (availabilityOpen) setAvailabilityOpen(false);
+      else if (composerOpen) closeComposer();
+      else if (cheatsheetOpen) setCheatsheetOpen(false);
+      else if (paletteOpen) setPaletteOpen(false);
+    },
+    { enableOnContentEditable: composerOpen },
+    [availabilityOpen, cheatsheetOpen, closeComposer, composerOpen, paletteOpen, snoozeOpen],
+  );
+
+  useEffect(() => {
+    const onIframeHotkey = (event: Event) => {
+      if (composerOpen || paletteOpen || snoozeOpen || availabilityOpen || cheatsheetOpen) return;
+      const key = (event as CustomEvent<{ key: string }>).detail?.key;
+      if (!key || !selectedThreadId) return;
+
+      const actionByKey: Record<string, string> = {
+        j: "nextThread",
+        k: "prevThread",
+        e: "archive",
+        r: "reply",
+        m: "meeting",
+        s: "snooze",
+      };
+      const action = actionByKey[key];
+      if (action) handleAction(action);
+    };
+
+    window.addEventListener("inbox-hotkey", onIframeHotkey);
+    return () => window.removeEventListener("inbox-hotkey", onIframeHotkey);
+  }, [
+    availabilityOpen,
+    cheatsheetOpen,
+    composerOpen,
+    handleAction,
+    paletteOpen,
+    selectedThreadId,
+    snoozeOpen,
+  ]);
+
+  const meetingDuration =
+    selectedLinkedMeeting?.durationMinutes ??
+    selectedClassification?.schedulingIntent?.duration ??
+    30;
 
   const freeSlots = useMemo(() => {
-    const slots: Date[] = [];
-    const base = new Date();
-    for (let i = 1; i <= 5; i++) {
-      const slot = new Date(base);
-      slot.setDate(slot.getDate() + i);
-      slot.setHours(10 + (i % 3) * 2, 0, 0, 0);
-      slots.push(slot);
+    const eventsForSlots =
+      selectedLinkedMeeting && availabilityMode === "reschedule"
+        ? calendarEvents.filter((event) => event.id !== selectedLinkedMeeting.eventId)
+        : calendarEvents;
+    return computeFreeSlots(eventsForSlots, meetingDuration);
+  }, [calendarEvents, meetingDuration, selectedLinkedMeeting, availabilityMode]);
+
+  const handleMeetingSlot = useCallback(
+    async (slot: Date) => {
+      if (!selectedThreadId || !selectedThread) return;
+
+      const isReschedule = availabilityMode === "reschedule" && !!selectedLinkedMeeting;
+      const previousLane = selectedClassification?.lane ?? "reply";
+      const previousMeeting = selectedLinkedMeeting;
+      setAvailabilityOpen(false);
+
+      const buildEvent = (eventId: string, hangoutLink?: string): CalendarEvent => ({
+        id: eventId,
+        summary: selectedThread.subject,
+        start: slot,
+        end: new Date(slot.getTime() + meetingDuration * 60_000),
+        attendees: meetingAttendees.map((email) => ({
+          email,
+          name: email,
+          responseStatus: "needsAction" as const,
+        })),
+        organizer: { email: userEmail, name: userEmail },
+        status: "confirmed",
+        location: hangoutLink,
+      });
+
+      try {
+        const result = isReschedule
+          ? await updateMeetingApi({
+              threadId: selectedThreadId,
+              slotStart: slot,
+              durationMinutes: meetingDuration,
+            })
+          : await createMeetingApi({
+              threadId: selectedThreadId,
+              slotStart: slot,
+              durationMinutes: meetingDuration,
+            });
+
+        const meeting: ThreadMeeting = {
+          threadId: selectedThreadId,
+          eventId: result.eventId,
+          start: new Date(result.meeting.start),
+          durationMinutes: result.meeting.durationMinutes,
+        };
+
+        setThreadMeetings((prev) => {
+          const rest = prev.filter((item) => item.threadId !== selectedThreadId);
+          return [...rest, meeting];
+        });
+
+        setCalendarEvents((prev) => {
+          const rest = prev.filter((event) => event.id !== result.eventId);
+          return [...rest, buildEvent(result.eventId, result.hangoutLink)];
+        });
+
+        if (!isReschedule) {
+          setClassifications((prev) =>
+            prev.map((c) =>
+              c.threadId === selectedThreadId ? { ...c, lane: "done" as const } : c
+            )
+          );
+          const next = laneThreads.find((t) => t.id !== selectedThreadId);
+          setSelectedThreadId(next?.id ?? null);
+        }
+
+        setComposerDraft(result.draftHtml);
+        setComposerOpen(true);
+
+        showUndo(
+          isReschedule ? "Meeting rescheduled — updated draft ready" : "Meeting created — confirmation draft ready",
+          () => undefined
+        );
+      } catch (error) {
+        setAvailabilityOpen(true);
+        if (previousMeeting) {
+          setThreadMeetings((prev) => {
+            const rest = prev.filter((item) => item.threadId !== selectedThreadId);
+            return [...rest, previousMeeting];
+          });
+        }
+        if (!isReschedule) {
+          setClassifications((prev) =>
+            prev.map((c) =>
+              c.threadId === selectedThreadId ? { ...c, lane: previousLane } : c
+            )
+          );
+        }
+        showUndo(
+          error instanceof Error ? error.message : "Could not save meeting",
+          () => undefined
+        );
+      }
+    },
+    [
+      availabilityMode,
+      laneThreads,
+      meetingAttendees,
+      meetingDuration,
+      selectedClassification,
+      selectedLinkedMeeting,
+      selectedThread,
+      selectedThreadId,
+      showUndo,
+      userEmail,
+    ]
+  );
+
+  const handleCancelMeeting = useCallback(async () => {
+    if (!selectedThreadId || !selectedLinkedMeeting) return;
+
+    const snapshot = selectedLinkedMeeting;
+    const snapshotEvent = selectedLinkedEvent;
+
+    setThreadMeetings((prev) => prev.filter((meeting) => meeting.threadId !== selectedThreadId));
+    setCalendarEvents((prev) => prev.filter((event) => event.id !== snapshot.eventId));
+
+    try {
+      await cancelMeetingApi(selectedThreadId);
+      showUndo("Meeting cancelled — attendees notified", () => undefined);
+    } catch (error) {
+      setThreadMeetings((prev) => [...prev, snapshot]);
+      if (snapshotEvent) {
+        setCalendarEvents((prev) => [...prev, snapshotEvent]);
+      }
+      showUndo(
+        error instanceof Error ? error.message : "Could not cancel meeting",
+        () => undefined
+      );
     }
-    return slots;
-  }, []);
+  }, [selectedLinkedEvent, selectedLinkedMeeting, selectedThreadId, showUndo]);
+
+  const handleComposerSend = useCallback(
+    async (bodyHtml: string) => {
+      if (!selectedThread) return;
+
+      const subject = selectedThread.subject.startsWith("Re:")
+        ? selectedThread.subject
+        : `Re: ${selectedThread.subject}`;
+      const to = replyRecipients(selectedThread, userEmail);
+
+      try {
+        const queued = await queueSendApi({
+          to,
+          subject,
+          body: bodyHtml,
+          threadId: selectedThread.id,
+        });
+
+        setComposerOpen(false);
+        let cancelled = false;
+        const timer = window.setTimeout(() => {
+          if (!cancelled) {
+            void dispatchSendApi(queued.scheduledSendId).catch(() => undefined);
+          }
+        }, queued.undoWindowMs || 5000);
+
+        showUndo("Sending in 5s — undo to cancel", () => {
+          cancelled = true;
+          window.clearTimeout(timer);
+          void cancelSendApi(queued.scheduledSendId).catch(() => undefined);
+          setComposerOpen(true);
+        });
+      } catch (error) {
+        showUndo(error instanceof Error ? error.message : "Send failed", () => undefined);
+      }
+    },
+    [selectedThread, userEmail, showUndo]
+  );
 
   const laneCounts = useMemo(() => {
     const counts: Record<TriageLane, number> = { reply: 0, schedule: 0, fyi: 0, done: 0 };
@@ -388,21 +705,45 @@ export function InboxShell({
     return counts;
   }, [classifications, snoozedIds]);
 
-  const handleSendLater = useCallback(() => {
-    const sendAt = new Date(Date.now() + 3600000); // 1 hour from now (mock)
-    const activityId = `send-${Date.now()}`;
-    addActivity({
-      id: activityId,
-      type: "scheduled_send",
-      label: `Send later: ${selectedThread?.subject.slice(0, 30)}…`,
-      detail: format(sendAt, "h:mm a · MMM d"),
-      at: sendAt,
-    });
-    setComposerOpen(false);
-    showUndo("Scheduled send — undo to cancel", () => {
-      setActivities((prev) => prev.filter((a) => a.id !== activityId));
-    });
-  }, [selectedThread, addActivity, showUndo]);
+  const handleSendLater = useCallback(
+    async (bodyHtml: string) => {
+      if (!selectedThread || !bodyHtml.trim()) return;
+
+      const sendAt = new Date(Date.now() + 3_600_000);
+      const subject = selectedThread.subject.startsWith("Re:")
+        ? selectedThread.subject
+        : `Re: ${selectedThread.subject}`;
+      const to = replyRecipients(selectedThread, userEmail);
+      const activityId = `send-${Date.now()}`;
+
+      try {
+        const queued = await queueSendApi({
+          to,
+          subject,
+          body: bodyHtml,
+          threadId: selectedThread.id,
+          sendAt,
+        });
+
+        addActivity({
+          id: activityId,
+          type: "scheduled_send",
+          label: `Send later: ${selectedThread.subject.slice(0, 30)}…`,
+          detail: format(sendAt, "h:mm a · MMM d"),
+          at: sendAt,
+        });
+        setComposerOpen(false);
+
+        showUndo("Scheduled send — undo to cancel", () => {
+          setActivities((prev) => prev.filter((a) => a.id !== activityId));
+          void cancelSendApi(queued.scheduledSendId).catch(() => undefined);
+        });
+      } catch (error) {
+        showUndo(error instanceof Error ? error.message : "Schedule failed", () => undefined);
+      }
+    },
+    [selectedThread, userEmail, addActivity, showUndo]
+  );
 
   return (
     <TooltipProvider>
@@ -542,6 +883,8 @@ export function InboxShell({
                   lane={activeLane}
                   threads={filteredLaneThreads}
                   classifications={classificationMap}
+                  threadMeetings={threadMeetingsMap}
+                  rsvpByThread={rsvpByThread}
                   selectedThreadId={selectedThreadId}
                   multiSelectMode={multiSelectMode}
                   selectedIds={selectedIds}
@@ -564,24 +907,50 @@ export function InboxShell({
           {/* Center: thread view + composer */}
           <Panel id="main" defaultSize="48%" minSize="30%" className="min-w-0">
             <main className="flex h-full min-w-0 flex-col overflow-hidden">
-              <ThreadView
-                thread={selectedThread}
-                modLabel={modLabel}
-                onReply={() => setComposerOpen(true)}
-                onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
-                onSchedule={() => setAvailabilityOpen(true)}
-                onSnooze={openSnooze}
-              />
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <ThreadView
+                  thread={selectedThread}
+                  modLabel={modLabel}
+                  linkedMeeting={selectedLinkedMeeting}
+                  linkedEvent={selectedLinkedEvent}
+                  rsvpSummary={selectedRsvpSummary}
+                  availabilityOpen={availabilityOpen}
+                  availabilityMode={availabilityMode}
+                  schedulingIntent={selectedClassification?.schedulingIntent ?? null}
+                  freeSlots={freeSlots}
+                  meetingAttendees={meetingAttendees}
+                  onReply={openReplyComposer}
+                  onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
+                  onSchedule={openScheduleMeeting}
+                  onSnooze={openSnooze}
+                  onCloseAvailability={() => setAvailabilityOpen(false)}
+                  onSelectSlot={(slot) => {
+                    void handleMeetingSlot(slot);
+                  }}
+                  onRescheduleMeeting={() => {
+                    setAvailabilityMode("reschedule");
+                    setAvailabilityOpen(true);
+                  }}
+                  onCancelMeeting={() => {
+                    void handleCancelMeeting();
+                  }}
+                />
+              </div>
               <ComposerPanel
                 open={composerOpen}
                 subject={selectedThread?.subject ?? ""}
                 modLabel={modLabel}
-                onClose={() => setComposerOpen(false)}
-                onSend={() => {
-                  setComposerOpen(false);
-                  showUndo("Sending in 5s — undo to cancel", () => {
-                    /* cancel send */
-                  });
+                initialContent={composerDraft}
+                loading={draftLoading}
+                onClose={closeComposer}
+                onSend={handleComposerSend}
+                onToneChange={(tone) => {
+                  if (!selectedThreadId) return;
+                  setDraftLoading(true);
+                  void generateDraftApi(selectedThreadId, tone)
+                    .then((result) => setComposerDraft(result.draftHtml))
+                    .catch(() => undefined)
+                    .finally(() => setDraftLoading(false));
                 }}
                 onSendLater={handleSendLater}
               />
@@ -606,7 +975,7 @@ export function InboxShell({
               <ResizeHandle orientation="vertical" />
               <Panel id="calendar" defaultSize="62%" minSize="28%" className="min-h-0">
                 <CalendarPanel
-                  events={events}
+                  events={calendarEvents}
                   searchQuery={calendarSearch}
                   onSearchChange={setCalendarSearch}
                   onDefrag={() =>
@@ -647,19 +1016,6 @@ export function InboxShell({
           onAction={handleAction}
         />
         <ShortcutCheatsheet open={cheatsheetOpen} onOpenChange={setCheatsheetOpen} isMac={isMac} />
-        <AvailabilityPicker
-          open={availabilityOpen}
-          onOpenChange={setAvailabilityOpen}
-          schedulingIntent={selectedClassification?.schedulingIntent ?? null}
-          freeSlots={freeSlots}
-          onSelectSlot={() => {
-            setAvailabilityOpen(false);
-            setComposerOpen(true);
-            showUndo("Meeting created — confirmation draft ready", () => {
-              /* revert meeting */
-            });
-          }}
-        />
         <SnoozePicker
           open={snoozeOpen}
           onOpenChange={setSnoozeOpen}

@@ -22,6 +22,13 @@
       "when": 1781188000000,
       "tag": "0002_backfill_column",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781192000000,
+      "tag": "0003_thread_meetings",
+      "breakpoints": true
     }
   ]
 }

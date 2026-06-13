@@ -18,10 +18,10 @@ export function SignInForm() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-border bg-card/40 p-8 text-center backdrop-blur-sm">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">Command Inbox</p>
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Sign in to continue</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+    <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 text-center shadow-[0_12px_48px_-16px_rgba(0,0,0,0.18)]">
+      <p className="text-[15px] font-semibold tracking-tight text-primary">Command Inbox</p>
+      <h1 className="mt-3 text-2xl font-semibold tracking-[-0.022em]">Sign in to continue</h1>
+      <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
         Connect your Google account to load real Gmail threads and calendar events.
       </p>
 

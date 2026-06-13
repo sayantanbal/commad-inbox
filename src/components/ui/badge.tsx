@@ -2,16 +2,17 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium transition-colors",
+  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-tight transition-colors",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary/15 text-primary",
+        default: "border-transparent bg-primary/10 text-primary",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         outline: "border-border text-muted-foreground",
-        high: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-        medium: "border-sky-500/30 bg-sky-500/10 text-sky-300",
-        low: "border-border bg-muted text-muted-foreground",
+        // Priority signals — amber is the only functional status hue here; medium/low stay neutral.
+        high: "border-amber-300/70 bg-amber-50 text-amber-800",
+        medium: "border-border bg-secondary text-foreground/75",
+        low: "border-transparent bg-secondary text-muted-foreground",
       },
     },
     defaultVariants: {

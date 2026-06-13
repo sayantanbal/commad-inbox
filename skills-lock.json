@@ -19,11 +19,23 @@
       "skillPath": "gcp-development/SKILL.md",
       "computedHash": "b6cf28e3482887756f61caddf5f35535bc7098f58aeb36fb0785740560890980"
     },
+    "gmail-workflows": {
+      "source": "claude-office-skills/skills",
+      "sourceType": "github",
+      "skillPath": "gmail-workflows/SKILL.md",
+      "computedHash": "c72aa0626a267932db8c06073b0a6249deb43288b48b8319e0d7062fb8e64720"
+    },
     "grill-me": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grill-me/SKILL.md",
       "computedHash": "daf64ca15f4fa081a6747766db538e2dbd1131725ed4fcdd3d538dc62c7035ba"
+    },
+    "mcp-builder": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/mcp-builder/SKILL.md",
+      "computedHash": "6498a736a8dc5c645047c8a875b8ea7417e2ad97146f005200e50d20a9337ada"
     },
     "next-best-practices": {
       "source": "vercel-labs/next-skills",
@@ -42,6 +54,12 @@
       "sourceType": "github",
       "skillPath": "skills/web-design-guidelines/SKILL.md",
       "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    },
+    "zod": {
+      "source": "pproenca/dot-skills",
+      "sourceType": "github",
+      "skillPath": "skills/.curated/zod/SKILL.md",
+      "computedHash": "e15dbf6f7f4f81616843cf855cbc984ad301455c7e298d7820c02fb3280e16f3"
     }
   }
 }

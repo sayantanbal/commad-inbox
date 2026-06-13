@@ -12,6 +12,9 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "x", context: "list", action: "select", description: "Toggle multi-select" },
   { key: "k", mod: true, context: "global", action: "palette", description: "Command palette" },
   { key: "Enter", mod: true, context: "composer", action: "send", description: "Send email" },
+  { key: "Escape", context: "composer", action: "cancel", description: "Close composer" },
+  { key: "z", mod: true, context: "composer", action: "undo", description: "Undo" },
+  { key: "z", mod: true, shift: true, context: "composer", action: "redo", description: "Redo" },
   { key: "f", mod: true, shift: true, context: "global", action: "advancedSearch", description: "Advanced search" },
 ];
 
@@ -23,7 +26,9 @@ export function formatShortcut(shortcut: Shortcut, isMac: boolean): string {
   const parts: string[] = [];
   if (shortcut.mod) parts.push(getModLabel(isMac));
   if (shortcut.shift) parts.push("⇧");
+  if (shortcut.action === "redo" && !isMac) return "Ctrl+Y";
   if (shortcut.key === "Enter") parts.push("↵");
+  else if (shortcut.key === "Escape") parts.push("Esc");
   else if (shortcut.key === "/") parts.push("/");
   else parts.push(shortcut.key.toUpperCase());
   return parts.join(isMac ? "" : "+");

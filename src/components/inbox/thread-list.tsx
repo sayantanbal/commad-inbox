@@ -1,10 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { format } from "date-fns";
 import { CheckSquare, Square } from "lucide-react";
 import { PriorityBadge } from "@/components/inbox/priority-badge";
+import { RsvpChip } from "@/components/inbox/rsvp-chip";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import type { Classification, Thread, TriageLane } from "@/lib/types";
+import type { RsvpSummary } from "@/lib/inbox/rsvp";
+import type { Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
 
 const laneLabels: Record<TriageLane, string> = {
   reply: "Reply",
@@ -17,6 +20,8 @@ interface ThreadListProps {
   lane: TriageLane;
   threads: Thread[];
   classifications: Map<string, Classification>;
+  threadMeetings: Map<string, ThreadMeeting>;
+  rsvpByThread: Map<string, RsvpSummary>;
   selectedThreadId: string | null;
   multiSelectMode: boolean;
   selectedIds: Set<string>;
@@ -28,6 +33,8 @@ export function ThreadList({
   lane,
   threads,
   classifications,
+  threadMeetings,
+  rsvpByThread,
   selectedThreadId,
   multiSelectMode,
   selectedIds,
@@ -50,6 +57,8 @@ export function ThreadList({
     <div className="flex flex-col">
       {threads.map((thread, index) => {
         const classification = classifications.get(thread.id);
+        const meeting = threadMeetings.get(thread.id);
+        const rsvp = rsvpByThread.get(thread.id);
         const isSelected = selectedThreadId === thread.id;
         const isChecked = selectedIds.has(thread.id);
         const sender = classification?.sender ?? thread.participants[0]?.name ?? "Unknown";
@@ -124,11 +133,17 @@ export function ThreadList({
             {classification && (
               <div
                 className={cn(
-                  "mt-0.5",
+                  "mt-0.5 flex flex-wrap items-center gap-1.5",
                   multiSelectMode ? "col-span-2 col-start-2 row-start-3" : "col-span-2 col-start-1 row-start-3"
                 )}
               >
                 <PriorityBadge priority={classification.priority} />
+                {meeting && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {format(meeting.start, "EEE h:mm a")}
+                  </span>
+                )}
+                {rsvp && <RsvpChip summary={rsvp} />}
               </div>
             )}
           </motion.button>

@@ -1,4 +1,4 @@
-import type { CalendarEvent, Classification, Thread } from "@/lib/types";
+import type { CalendarEvent, Classification, Thread, ThreadMeeting } from "@/lib/types";
 
 export type SerializedInboxData = {
   threads: Array<
@@ -28,12 +28,18 @@ export type SerializedInboxData = {
       end: string;
     }
   >;
+  threadMeetings: Array<
+    Omit<ThreadMeeting, "start"> & {
+      start: string;
+    }
+  >;
 };
 
 export function serializeInboxData(input: {
   threads: Thread[];
   classifications: Classification[];
   events: CalendarEvent[];
+  threadMeetings: ThreadMeeting[];
 }): SerializedInboxData {
   return {
     threads: input.threads.map((thread) => ({
@@ -61,6 +67,10 @@ export function serializeInboxData(input: {
       start: event.start.toISOString(),
       end: event.end.toISOString(),
     })),
+    threadMeetings: input.threadMeetings.map((meeting) => ({
+      ...meeting,
+      start: meeting.start.toISOString(),
+    })),
   };
 }
 
@@ -68,6 +78,7 @@ export function deserializeInboxData(data: SerializedInboxData): {
   threads: Thread[];
   classifications: Classification[];
   events: CalendarEvent[];
+  threadMeetings: ThreadMeeting[];
 } {
   return {
     threads: data.threads.map((thread) => ({
@@ -94,6 +105,10 @@ export function deserializeInboxData(data: SerializedInboxData): {
       ...event,
       start: new Date(event.start),
       end: new Date(event.end),
+    })),
+    threadMeetings: (data.threadMeetings ?? []).map((meeting) => ({
+      ...meeting,
+      start: new Date(meeting.start),
     })),
   };
 }

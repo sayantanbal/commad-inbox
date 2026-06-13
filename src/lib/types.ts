@@ -4,6 +4,7 @@ export type Priority = "high" | "medium" | "low";
 export interface Participant {
   name: string;
   email: string;
+  responseStatus?: "needsAction" | "declined" | "tentative" | "accepted";
 }
 
 export interface Attachment {
@@ -17,7 +18,10 @@ export interface Message {
   id: string;
   from: Participant;
   to: Participant[];
+  /** Plain text for AI, search, and snippets */
   body: string;
+  /** Raw HTML from Gmail when available */
+  bodyHtml?: string | null;
   timestamp: Date;
   attachments: Attachment[];
 }
@@ -49,6 +53,13 @@ export interface Classification {
   snippet: string;
   schedulingIntent: SchedulingIntent | null;
   classifiedAt: Date;
+}
+
+export interface ThreadMeeting {
+  threadId: string;
+  eventId: string;
+  start: Date;
+  durationMinutes: number;
 }
 
 export interface CalendarEvent {
