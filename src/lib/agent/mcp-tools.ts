@@ -2,8 +2,7 @@ import { buildCorsairToolDefs } from "@corsair-dev/mcp";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { CorsairInstance } from "@/lib/corsair";
-
-const APPROVAL_TOOLS = new Set(["run_script"]);
+import { buildAgentActionTools } from "@/lib/agent/action-tools";
 
 function toolResultToOutput(result: {
   content: Array<{ type: string; text?: string }>;
@@ -24,7 +23,8 @@ function toolResultToOutput(result: {
 
 export function buildAgentMcpTools(
   tenant: ReturnType<CorsairInstance["withTenant"]>,
-  userId: string
+  userId: string,
+  userEmail: string
 ): ToolSet {
   const defs = buildCorsairToolDefs({
     corsair: tenant,
@@ -32,13 +32,14 @@ export function buildAgentMcpTools(
     setup: false,
   });
 
-  const tools: ToolSet = {};
+  const tools: ToolSet = { ...buildAgentActionTools(tenant, userEmail) };
 
   for (const def of defs) {
+    if (def.name === "run_script") continue;
+
     tools[def.name] = tool({
       description: def.description,
       inputSchema: z.object(def.shape),
-      needsApproval: APPROVAL_TOOLS.has(def.name),
       execute: async (input) => {
         const result = await def.handler(input as Record<string, unknown>);
         return toolResultToOutput(result);

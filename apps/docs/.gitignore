@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Fumadocs generated
+.source/
+
+# Env
+.env*.local
+
+# TypeScript
+next-env.d.ts

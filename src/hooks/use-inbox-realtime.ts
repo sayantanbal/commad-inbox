@@ -35,6 +35,7 @@ export function useInboxRealtime(
       channel.bind("backfill-complete", handler);
       channel.bind("reembed-progress", handler);
       channel.bind("reembed-complete", handler);
+      channel.bind("calendar-updated", handler);
     }
 
     const poll = setInterval(() => {

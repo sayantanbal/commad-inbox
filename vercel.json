@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "bun install",
+  "buildCommand": "bun run build",
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/process-due",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/renew-watches",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

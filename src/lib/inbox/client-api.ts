@@ -1,3 +1,5 @@
+import type { AiSummary } from "@/lib/schemas/domain";
+
 async function parseError(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { error?: string };
@@ -152,6 +154,40 @@ export async function cancelMeetingApi(threadId: string) {
   return response.json() as Promise<{ eventId: string }>;
 }
 
+export async function createFocusBlockApi(input: {
+  start: Date;
+  durationMinutes?: number;
+  summary?: string;
+}) {
+  const response = await fetch("/api/inbox/focus-block", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      start: input.start.toISOString(),
+      durationMinutes: input.durationMinutes ?? 90,
+      summary: input.summary,
+    }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    eventId: string;
+    summary: string;
+    start: string;
+    end: string;
+    htmlLink?: string;
+  }>;
+}
+
+export async function deleteFocusBlockApi(eventId: string) {
+  const response = await fetch("/api/inbox/focus-block", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ eventId: string }>;
+}
+
 export async function generateDraftApi(
   threadId: string,
   tone: "professional" | "friendly" | "brief"
@@ -163,4 +199,106 @@ export async function generateDraftApi(
   });
   if (!response.ok) throw new Error(await parseError(response));
   return response.json() as Promise<{ draftHtml: string; source: "ai" | "template" }>;
+}
+
+export async function fetchThreadSummaryApi(
+  threadId: string,
+  messageCount: number,
+  provider: "openai" | "gemini"
+) {
+  const params = new URLSearchParams({
+    threadId,
+    messageCount: String(messageCount),
+  });
+  const cached = await fetch(`/api/inbox/summary?${params}`);
+  if (cached.ok) {
+    const data = (await cached.json()) as { cached: boolean; summary?: AiSummary };
+    if (data.cached && data.summary) {
+      return { summary: data.summary, source: "cache" as const };
+    }
+  }
+
+  const response = await fetch("/api/inbox/summary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ threadId, provider }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    summary: AiSummary;
+    source: "ai" | "cache";
+  }>;
+}
+
+export async function fetchCalendarEventsApi(month: string) {
+  const response = await fetch(`/api/inbox/events?month=${encodeURIComponent(month)}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    month: string;
+    events: Array<
+      Omit<import("@/lib/types").CalendarEvent, "start" | "end"> & {
+        start: string;
+        end: string;
+      }
+    >;
+  }>;
+}
+
+export async function fetchDailyBriefApi(
+  provider: "openai" | "gemini",
+  options?: { refresh?: boolean; timezone?: string }
+) {
+  const response = await fetch("/api/inbox/daily-brief", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider,
+      refresh: options?.refresh ?? false,
+      timezone:
+        options?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    brief: import("@/lib/schemas/domain").DailyBrief;
+    provider: string;
+    source: "ai" | "cache";
+  }>;
+}
+
+export interface AgentConversationItem {
+  id: string;
+  title: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export async function listAgentConversationsApi() {
+  const response = await fetch("/api/agent/conversations");
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ conversations: AgentConversationItem[] }>;
+}
+
+export async function createAgentConversationApi() {
+  const response = await fetch("/api/agent/conversations", { method: "POST" });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ conversation: AgentConversationItem }>;
+}
+
+export async function loadAgentConversationApi(conversationId: string) {
+  const response = await fetch(`/api/agent/conversations/${conversationId}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ messages: import("ai").UIMessage[] }>;
+}
+
+export async function saveAgentConversationApi(
+  conversationId: string,
+  messages: import("ai").UIMessage[]
+) {
+  const response = await fetch(`/api/agent/conversations/${conversationId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
 }

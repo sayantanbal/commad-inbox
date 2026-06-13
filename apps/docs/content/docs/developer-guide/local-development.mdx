@@ -1,0 +1,132 @@
+---
+title: Local development
+description: Clone, install, configure, and run Command Inbox locally
+---
+
+## Prerequisites
+
+| Tool | Version |
+|------|---------|
+| [Bun](https://bun.sh) | Latest stable |
+| Node-compatible OS | macOS, Linux, or WSL on Windows |
+| Neon Postgres | Or local Postgres 16+ with pgvector |
+| Google Cloud project | Gmail + Calendar OAuth credentials |
+
+Optional for Phase 2+:
+
+- Google AI (Gemini) and/or OpenAI API key
+- Pusher Channels app
+- GCP Pub/Sub topic + ngrok for webhooks
+
+## 1. Clone and install
+
+```bash
+git clone <repo-url> commad-inbox
+cd commad-inbox
+bun install
+```
+
+This installs the root app and workspace packages (including `apps/docs`).
+
+## 2. Environment
+
+Copy the example env file:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in at minimum **Phase 0** variables:
+
+| Variable | How to get it |
+|----------|---------------|
+| `DATABASE_URL` | Neon connection string (pooled) |
+| `CORSAIR_KEK` | `openssl rand -base64 32` — **keep stable** |
+| `GOOGLE_CLIENT_ID` / `SECRET` | Google Cloud OAuth client |
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
+
+See [Environment variables](/docs/developer-guide/environment-variables) for the full list.
+
+## 3. Database and Corsair
+
+```bash
+bun run db:migrate
+bun run corsair:setup
+```
+
+Optional sanity check:
+
+```bash
+bun run smoke:corsair
+```
+
+Or run all Phase 0 steps:
+
+```bash
+bun run phase0
+```
+
+<Callout type="warn">
+  If you change `CORSAIR_KEK` after setup, run `bun run corsair:reset` — existing encrypted tokens become unreadable.
+</Callout>
+
+## 4. Start the dev server
+
+```bash
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+If port 3000 is busy, Next.js may use **3001** — check terminal output and match ngrok accordingly.
+
+## 5. Sign in and connect
+
+1. Sign in with Google
+2. Complete **Connect Google** for Gmail + Calendar
+3. Wait for backfill on `/inbox`
+
+## 6. Phase 2 local webhooks (optional)
+
+For realtime triage during development:
+
+1. Set AI keys in `.env.local`
+2. Configure Pub/Sub per [Webhooks & realtime](/docs/developer-guide/webhooks-realtime)
+3. Run ngrok: `ngrok http 3000` (or 3001)
+4. Set `APP_URL` to the ngrok HTTPS URL
+5. Restart dev server
+
+## 7. Documentation site
+
+Run the Fumadocs app locally:
+
+```bash
+bun run docs:dev
+```
+
+Open [http://localhost:3001](http://localhost:3001) (docs app default port).
+
+Build docs:
+
+```bash
+bun run docs:build
+```
+
+## Common scripts
+
+| Script | Purpose |
+|--------|---------|
+| `bun dev` | Main app dev server |
+| `bun run db:migrate` | Apply Drizzle migrations |
+| `bun run db:studio` | Drizzle Studio GUI |
+| `bun run corsair:setup` | Initialize Corsair integrations |
+| `bun run gmail:watch` | Register Gmail push watch |
+| `bun run docs:dev` | Docs site dev server |
+
+Full list: [Scripts & CLI](/docs/reference/scripts-cli).
+
+## Next steps
+
+- [Corsair setup](/docs/developer-guide/corsair-setup) — OAuth and tenant details
+- [Webhooks & realtime](/docs/developer-guide/webhooks-realtime) — Pub/Sub + Pusher
+- [Troubleshooting](/docs/developer-guide/troubleshooting)

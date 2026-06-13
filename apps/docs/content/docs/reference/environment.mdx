@@ -1,0 +1,208 @@
+---
+title: Environment variables
+description: Complete environment variable reference with validation rules
+---
+
+All variables are validated in `src/lib/env.ts` at server boot. Optional blank strings are coerced to `undefined`.
+
+## NODE_ENV
+
+| Property | Value |
+|----------|-------|
+| Type | `"development"` \| `"test"` \| `"production"` |
+| Default | `"development"` |
+| Phase | 0 |
+
+## DATABASE_URL
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (min 1 char) |
+| Required | Yes |
+| Phase | 0 |
+| Example | `postgresql://user:pass@ep-xxx.pooler.neon.tech/neondb?sslmode=require` |
+
+Neon **pooled** connection string recommended for serverless.
+
+## CORSAIR_KEK
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (min 1 char) |
+| Required | Yes |
+| Phase | 0 |
+| Generate | `openssl rand -base64 32` |
+
+Corsair key-encryption key. **Not** `CORSAIR_SECRET`. Must remain stable after `corsair:setup`.
+
+## GOOGLE_CLIENT_ID
+
+| Property | Value |
+|----------|-------|
+| Type | `string` |
+| Required | Yes |
+| Phase | 0 |
+| Validation | Must end with `.apps.googleusercontent.com` |
+
+Shared by Better Auth and Corsair Gmail/Calendar plugins.
+
+## GOOGLE_CLIENT_SECRET
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (min 1 char) |
+| Required | Yes |
+| Phase | 0 |
+
+## BETTER_AUTH_URL
+
+| Property | Value |
+|----------|-------|
+| Type | URL string |
+| Default | `http://localhost:3000` |
+| Phase | 0 |
+
+Canonical app URL for Better Auth. Production: `https://command-inbox.sayantanbal.in`
+
+## APP_URL
+
+| Property | Value |
+|----------|-------|
+| Type | URL string |
+| Required | No |
+| Default | Falls back to `BETTER_AUTH_URL` |
+| Phase | 0 |
+
+Used for Corsair OAuth redirects and webhook base URL. Set to ngrok HTTPS URL during local webhook development.
+
+Helper: `getAppUrl()` returns `APP_URL ?? BETTER_AUTH_URL`.
+
+## BETTER_AUTH_SECRET
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (min 32 chars) |
+| Required | Phase 1 (sign-in) |
+| Generate | `openssl rand -base64 32` |
+
+Enforced by `assertPhase1Env()` when auth is used.
+
+## BETTER_AUTH_API_KEY
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 1 |
+
+Optional — `@better-auth/infra` Dash/Sentinel hosted features only.
+
+## GOOGLE_GENERATIVE_AI_API_KEY
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | One of two AI keys for Phase 2 |
+| Phase | 2 |
+
+Powers Gemini chat (`gemini-2.5-flash`) and embeddings (`text-embedding-004`).
+
+## OPENAI_API_KEY
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | One of two AI keys for Phase 2 |
+| Phase | 2 |
+
+Default provider — GPT-5 Nano + text-embedding-3-small.
+
+## GMAIL_PUBSUB_TOPIC
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No (required for webhooks) |
+| Phase | 2 |
+| Format | `projects/<project-id>/topics/<topic-name>` |
+
+## PUSHER_APP_ID
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 2 |
+
+Server-side Pusher Channels app ID.
+
+## PUSHER_KEY
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 2 |
+
+Server-side Pusher key.
+
+## PUSHER_SECRET
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 2 |
+
+Server-side Pusher secret.
+
+## PUSHER_CLUSTER
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 2 |
+| Example | `us2` |
+
+## NEXT_PUBLIC_PUSHER_KEY
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 2 |
+
+Browser-exposed Pusher key — must match server app.
+
+## NEXT_PUBLIC_PUSHER_CLUSTER
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No |
+| Phase | 2 |
+
+Must match `PUSHER_CLUSTER`.
+
+## CRON_SECRET
+
+| Property | Value |
+|----------|-------|
+| Type | `string` (non-empty) |
+| Required | No (required for send-later) |
+| Phase | 3+ |
+| Generate | `openssl rand -base64 32` |
+
+Bearer token for `POST /api/cron/process-due`.
+
+## Phase assertion helpers
+
+| Function | Throws when |
+|----------|-------------|
+| `assertPhase1Env()` | `BETTER_AUTH_SECRET` missing |
+| `assertPhase2Env()` | Both AI keys missing |
+
+## Client exposure rules
+
+Only `NEXT_PUBLIC_*` variables are available in browser bundles. Never import `@/lib/env` from client code — the module uses `import "server-only"`.

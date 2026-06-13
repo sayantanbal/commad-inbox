@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { AuthMissingError } from "corsair/core";
 import { redirect } from "next/navigation";
 import { InboxSetupRequired } from "@/components/inbox/inbox-setup-required";
@@ -14,6 +16,7 @@ import { requireConnectedTenant } from "@/lib/corsair/tenant";
 import { getSnoozesForUser } from "@/lib/inbox/snoozes";
 import { getThreadMeetingsForUser } from "@/lib/inbox/thread-meetings";
 import { serializeInboxData } from "@/lib/inbox-serialize";
+import { renewWatchesIfNeeded } from "@/lib/webhooks/renew-watches";
 import { InboxClient } from "./inbox-client";
 
 function isAuthError(error: unknown): boolean {
@@ -29,6 +32,10 @@ function isAuthError(error: unknown): boolean {
 
 export default async function InboxPage() {
   const { tenant, userId, userEmail } = await requireConnectedTenant();
+
+  void renewWatchesIfNeeded(userId).catch((error) => {
+    console.error("[inbox] watch renewal failed", error);
+  });
 
   try {
     const [threads, storedClassifications, events, backfillComplete, snoozes, threadMeetings] =

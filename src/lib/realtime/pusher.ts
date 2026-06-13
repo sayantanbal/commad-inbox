@@ -27,6 +27,9 @@ export type InboxRealtimeEvent =
       provider: "gemini" | "openai";
       total: number;
       completed?: number;
+    }
+  | {
+      type: "calendar-updated";
     };
 
 let server: Pusher | null = null;

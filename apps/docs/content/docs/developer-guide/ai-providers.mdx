@@ -1,0 +1,91 @@
+---
+title: AI providers
+description: OpenAI-first chain, embeddings, re-embed jobs, and fallback behavior
+---
+
+Command Inbox uses the **Vercel AI SDK** with two providers: OpenAI (default) and Gemini (fallback).
+
+## Provider configuration
+
+Defined in `src/lib/ai/providers.ts`:
+
+| Provider | Chat model | Embedding model | Dimensions |
+|----------|------------|-----------------|------------|
+| **openai** (default) | `gpt-5-nano` | `text-embedding-3-small` | 768 |
+| **gemini** (fallback) | `gemini-2.5-flash` | `text-embedding-004` | 768 |
+
+User selection persists in localStorage: `command-inbox-ai-provider-v2`.
+
+## Provider chain
+
+`getProviderChain()` in `src/lib/ai/with-fallback.ts` returns `[primary, fallback]`:
+
+1. Try **OpenAI** first for chat, classify, draft, embed
+2. On rate limit or quota error, retry with **Gemini**
+3. If both fail, feature-specific fallback applies
+
+## Features using AI
+
+| Feature | OpenAI path | Fallback behavior |
+|---------|-------------|-------------------|
+| Webhook classification | classify + embed | Gemini, then log error |
+| Draft generation | AI draft HTML | Template draft if both fail |
+| Semantic search | Query embedding | Gemini embed |
+| Agent chat | streamText + tools | Gemini; no template fallback |
+| Meeting confirmation draft | AI HTML | Template draft |
+
+## Embeddings and provider tracking
+
+Each `classifications` row stores:
+
+- `embedding` — 768-dim pgvector
+- `embedding_provider` — `openai` or `gemini`
+
+Semantic search filters by the **active provider** so vectors are compared apples-to-apples.
+
+## Re-embed job
+
+When the user switches embedding provider in the UI:
+
+1. `POST /api/inbox/reembed { "provider": "openai" | "gemini" }`
+2. Background job re-embeds all classifications for that user
+3. Activity banner shows progress
+4. Search uses new vectors when complete
+
+Statuses:
+
+| Status | Meaning |
+|--------|---------|
+| `running` | Job already in progress |
+| `nothing-to-do` | All rows already on target provider |
+| `started` | Job kicked off with `total` count |
+
+Implementation: `src/lib/embeddings/reembed-inbox.ts`
+
+## Rate limiting
+
+`src/lib/ai/rate-limit.ts` provides lightweight in-memory rate limiting for AI calls during development bursts.
+
+## Env requirements
+
+At least one of:
+
+```bash
+OPENAI_API_KEY=
+GOOGLE_GENERATIVE_AI_API_KEY=
+```
+
+`assertPhase2Env()` enforces this for AI-dependent routes.
+
+## Quota troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Drafts say "template" source | AI failed — add credits to OpenAI or Gemini |
+| Agent returns 503 | No valid AI keys |
+| Empty semantic search after switch | Wait for re-embed job |
+
+## Related
+
+- [AI configuration reference](/docs/reference/ai-configuration)
+- [Semantic search](/docs/user-guide/semantic-search)

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { addMinutes, format } from "date-fns";
 import { Activity, Command, Keyboard, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -10,6 +10,9 @@ import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import { ActivityBar } from "@/components/inbox/activity-bar";
 import { AgentChatPanel } from "@/components/inbox/agent-chat-panel";
 import { CalendarPanel } from "@/components/inbox/calendar-panel";
+import { DefragPanel } from "@/components/inbox/defrag-panel";
+import { DailyBriefPanel } from "@/components/inbox/daily-brief-panel";
+import { PrimaryNav, type PrimaryView } from "@/components/inbox/primary-nav";
 import { CommandPalette } from "@/components/inbox/command-palette";
 import { ComposerPanel } from "@/components/inbox/composer-panel";
 import { ShortcutCheatsheet } from "@/components/inbox/shortcut-cheatsheet";
@@ -24,13 +27,16 @@ import { ResizeHandle } from "@/components/ui/resize-handle";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ActivityItem } from "@/lib/activity";
-import { computeFreeSlots } from "@/lib/calendar/free-slots";
+import { computeFreeSlots, findNearestFreeSlot, isSlotBusy } from "@/lib/calendar/free-slots";
 import {
   archiveThreadApi,
   cancelMeetingApi,
   cancelSendApi,
+  createFocusBlockApi,
   createMeetingApi,
+  deleteFocusBlockApi,
   dispatchSendApi,
+  fetchCalendarEventsApi,
   generateDraftApi,
   queueSendApi,
   restoreThreadApi,
@@ -44,7 +50,9 @@ import { SearchOverlay } from "@/components/inbox/search-overlay";
 import { AdvancedSearchOverlay } from "@/components/inbox/advanced-search-overlay";
 import { useInboxRealtime } from "@/hooks/use-inbox-realtime";
 import { useInboxShortcuts } from "@/hooks/use-inbox-shortcuts";
+import { useAiProvider } from "@/hooks/use-ai-provider";
 import { useIsMobile, usePlatform } from "@/hooks/use-platform";
+import type { SuggestedAction } from "@/lib/schemas/domain";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
 import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
 import type { CalendarEvent, Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
@@ -98,7 +106,7 @@ function initialThreadId(threads: Thread[], classifications: Classification[], l
 }
 
 export function InboxShell({
-  threads,
+  threads: initialThreads,
   classifications: initialClassifications,
   events: initialEvents,
   threadMeetings: initialThreadMeetings,
@@ -123,6 +131,7 @@ export function InboxShell({
       panelIds: ["agent", "calendar"],
     });
 
+  const [liveThreads, setLiveThreads] = useState(initialThreads);
   const [classifications, setClassifications] = useState(initialClassifications);
   const [calendarEvents, setCalendarEvents] = useState(initialEvents);
   const [threadMeetings, setThreadMeetings] = useState(initialThreadMeetings);
@@ -136,7 +145,7 @@ export function InboxShell({
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [activeLane, setActiveLane] = useState<TriageLane>(startingLane);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() =>
-    initialThreadId(threads, initialClassifications, startingLane)
+    initialThreadId(initialThreads, initialClassifications, startingLane)
   );
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -156,7 +165,11 @@ export function InboxShell({
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("inbox");
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
+  const [primaryView, setPrimaryView] = useState<PrimaryView>("inbox");
+  const [defragOpen, setDefragOpen] = useState(false);
+  const [briefInvalidationKey, setBriefInvalidationKey] = useState(0);
   const [undo, setUndo] = useState<UndoState | null>(null);
+  const { provider } = useAiProvider();
 
   const snoozedIds = useMemo(() => new Set(snoozed.map((s) => s.threadId)), [snoozed]);
 
@@ -167,11 +180,11 @@ export function InboxShell({
 
   const laneThreads = useMemo(
     () =>
-      threads.filter((t) => {
+      liveThreads.filter((t) => {
         if (snoozedIds.has(t.id)) return false;
         return classificationMap.get(t.id)?.lane === activeLane;
       }),
-    [threads, classificationMap, activeLane, snoozedIds]
+    [liveThreads, classificationMap, activeLane, snoozedIds]
   );
 
   const filteredLaneThreads = useMemo(() => {
@@ -187,7 +200,7 @@ export function InboxShell({
     });
   }, [laneThreads, threadSearch, classificationMap]);
 
-  const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
+  const selectedThread = liveThreads.find((t) => t.id === selectedThreadId) ?? null;
   const selectedClassification = selectedThreadId ? classificationMap.get(selectedThreadId) : undefined;
 
   const threadMeetingsMap = useMemo(
@@ -232,6 +245,40 @@ export function InboxShell({
   }, [selectedThread, selectedClassification, userEmail]);
 
   useEffect(() => {
+    setLiveThreads(initialThreads);
+  }, [initialThreads]);
+
+  useEffect(() => {
+    setClassifications(initialClassifications);
+  }, [initialClassifications]);
+
+  useEffect(() => {
+    setCalendarEvents(initialEvents);
+  }, [initialEvents]);
+
+  useEffect(() => {
+    setThreadMeetings(initialThreadMeetings);
+  }, [initialThreadMeetings]);
+
+  const loadCalendarMonth = useCallback(async (month: Date) => {
+    const monthKey = format(month, "yyyy-MM");
+    try {
+      const { events } = await fetchCalendarEventsApi(monthKey);
+      setCalendarEvents((prev) => {
+        const rest = prev.filter((event) => format(event.start, "yyyy-MM") !== monthKey);
+        const fresh = events.map((event) => ({
+          ...event,
+          start: new Date(event.start),
+          end: new Date(event.end),
+        }));
+        return [...rest, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
+      });
+    } catch {
+      /* keep existing events */
+    }
+  }, []);
+
+  useEffect(() => {
     setAvailabilityOpen(false);
   }, [selectedThreadId]);
 
@@ -258,6 +305,13 @@ export function InboxShell({
   const handleRealtimeEvent = useCallback((event: InboxRealtimeEvent) => {
     if (event.type === "classification-updated") {
       setClassifications((prev) => mergeClassifications(prev, event.classification));
+      setBriefInvalidationKey((key) => key + 1);
+      router.refresh();
+    }
+    if (event.type === "calendar-updated") {
+      void loadCalendarMonth(new Date());
+      setBriefInvalidationKey((key) => key + 1);
+      router.refresh();
     }
     if (event.type === "backfill-progress") {
       const pct = event.total > 0 ? Math.round((event.completed / event.total) * 100) : 0;
@@ -308,7 +362,7 @@ export function InboxShell({
       setActivities((prev) => prev.filter((a) => a.id !== "reembed"));
       router.refresh();
     }
-  }, [router]);
+  }, [router, loadCalendarMonth]);
 
   const pollInbox = useCallback(() => {
     router.refresh();
@@ -326,7 +380,7 @@ export function InboxShell({
 
   const archiveThread = useCallback(
     (threadId: string) => {
-      const thread = threads.find((t) => t.id === threadId);
+      const thread = liveThreads.find((t) => t.id === threadId);
       const previousLane = classificationMap.get(threadId)?.lane ?? "reply";
 
       setClassifications((prev) =>
@@ -350,12 +404,12 @@ export function InboxShell({
         void restoreThreadApi(threadId, previousLane).catch(() => undefined);
       });
     },
-    [threads, laneThreads, selectedThreadId, showUndo, classificationMap]
+    [liveThreads, laneThreads, selectedThreadId, showUndo, classificationMap]
   );
 
   const snoozeThread = useCallback(
     (threadId: string, until: Date, label: string) => {
-      const thread = threads.find((t) => t.id === threadId);
+      const thread = liveThreads.find((t) => t.id === threadId);
       const activityId = `snooze-${threadId}-${Date.now()}`;
 
       setSnoozed((prev) => [...prev.filter((s) => s.threadId !== threadId), { threadId, until, label }]);
@@ -382,7 +436,7 @@ export function InboxShell({
         void unsnoozeThreadApi(threadId).catch(() => undefined);
       });
     },
-    [threads, laneThreads, selectedThreadId, showUndo, addActivity]
+    [liveThreads, laneThreads, selectedThreadId, showUndo, addActivity]
   );
 
   const openSnooze = useCallback(() => {
@@ -593,6 +647,29 @@ export function InboxShell({
       if (!selectedThreadId || !selectedThread) return;
 
       const isReschedule = availabilityMode === "reschedule" && !!selectedLinkedMeeting;
+      const excludeEventId =
+        isReschedule && selectedLinkedMeeting ? selectedLinkedMeeting.eventId : undefined;
+      const slotEnd = addMinutes(slot, meetingDuration);
+      const eventsForCheck =
+        excludeEventId != null
+          ? calendarEvents.filter((event) => event.id !== excludeEventId)
+          : calendarEvents;
+
+      if (isSlotBusy(eventsForCheck, slot, slotEnd)) {
+        const alternative = findNearestFreeSlot(eventsForCheck, meetingDuration, slot);
+        if (alternative) {
+          showUndo(
+            `That time conflicts — using ${format(alternative, "EEE h:mm a")} instead`,
+            () => undefined
+          );
+          slot = alternative;
+        } else {
+          showUndo("That time conflicts with another event — pick a different slot", () => undefined);
+          setAvailabilityOpen(true);
+          return;
+        }
+      }
+
       const previousLane = selectedClassification?.lane ?? "reply";
       const previousMeeting = selectedLinkedMeeting;
       setAvailabilityOpen(false);
@@ -682,6 +759,7 @@ export function InboxShell({
     },
     [
       availabilityMode,
+      calendarEvents,
       laneThreads,
       meetingAttendees,
       meetingDuration,
@@ -798,6 +876,109 @@ export function InboxShell({
     setSelectedIds(new Set([threadId]));
   }, []);
 
+  const handleSuggestedAction = useCallback(
+    (action: SuggestedAction) => {
+      const runAfterSelect = (threadId: string | undefined, fn: () => void) => {
+        if (threadId) {
+          setPrimaryView("inbox");
+          setSelectedThreadId(threadId);
+          if (isMobile) {
+            setMobileTab("inbox");
+            setMobileThreadOpen(true);
+          }
+          queueMicrotask(fn);
+          return;
+        }
+        fn();
+      };
+
+      switch (action.type) {
+        case "reply":
+          runAfterSelect(action.threadId, () => openReplyComposer());
+          break;
+        case "compose":
+          runAfterSelect(action.threadId, () => {
+            openReplyComposer();
+            if (action.draftText) setComposerDraft(action.draftText);
+          });
+          break;
+        case "archive":
+          if (action.threadId) void archiveThread(action.threadId);
+          break;
+        case "schedule":
+          runAfterSelect(action.threadId, () => openScheduleMeeting());
+          break;
+        case "snooze":
+          runAfterSelect(action.threadId, () => openSnooze());
+          break;
+        case "open_thread":
+          if (action.threadId) {
+            setPrimaryView("inbox");
+            setSelectedThreadId(action.threadId);
+            if (isMobile) {
+              setMobileTab("inbox");
+              setMobileThreadOpen(true);
+            }
+          }
+          break;
+      }
+    },
+    [archiveThread, isMobile, openReplyComposer, openScheduleMeeting, openSnooze]
+  );
+
+  const handleBlockFocusTime = useCallback(
+    async (start: Date, durationMinutes: number) => {
+      try {
+        const result = await createFocusBlockApi({ start, durationMinutes });
+        const event: CalendarEvent = {
+          id: result.eventId,
+          summary: result.summary,
+          start: new Date(result.start),
+          end: new Date(result.end),
+          attendees: [],
+          organizer: { email: userEmail, name: userEmail },
+          status: "confirmed",
+        };
+        setCalendarEvents((prev) =>
+          [...prev.filter((item) => item.id !== event.id), event].sort(
+            (a, b) => a.start.getTime() - b.start.getTime()
+          )
+        );
+        showUndo(`Focus time blocked — ${format(start, "EEE h:mm a")}`, () => {
+          void deleteFocusBlockApi(result.eventId)
+            .then(() => {
+              setCalendarEvents((prev) => prev.filter((item) => item.id !== result.eventId));
+            })
+            .catch(() => undefined);
+        });
+      } catch (error) {
+        showUndo(
+          error instanceof Error ? error.message : "Could not block focus time",
+          () => undefined
+        );
+        throw error;
+      }
+    },
+    [showUndo, userEmail]
+  );
+
+  const renderCalendarContent = () =>
+    defragOpen ? (
+      <DefragPanel
+        events={calendarEvents}
+        onClose={() => setDefragOpen(false)}
+        onBlockFocusTime={handleBlockFocusTime}
+      />
+    ) : (
+      <CalendarPanel
+        events={calendarEvents}
+        searchQuery={calendarSearch}
+        onSearchChange={setCalendarSearch}
+        onMonthChange={loadCalendarMonth}
+        onDefrag={() => setDefragOpen(true)}
+      />
+    );
+
   const renderListPanel = (touchEnabled: boolean) => (
     <aside className="flex h-full flex-col overflow-hidden">
       <div className="flex border-b border-border">
@@ -904,6 +1085,13 @@ export function InboxShell({
           availabilityMode={availabilityMode}
           schedulingIntent={selectedClassification?.schedulingIntent ?? null}
           freeSlots={freeSlots}
+          calendarEvents={calendarEvents}
+          meetingDuration={meetingDuration}
+          excludeEventId={
+            availabilityMode === "reschedule" && selectedLinkedMeeting
+              ? selectedLinkedMeeting.eventId
+              : undefined
+          }
           meetingAttendees={meetingAttendees}
           onReply={openReplyComposer}
           onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
@@ -920,6 +1108,8 @@ export function InboxShell({
           onCancelMeeting={() => {
             void handleCancelMeeting();
           }}
+          aiProvider={provider}
+          onSuggestedAction={handleSuggestedAction}
         />
       </div>
       <ComposerPanel
@@ -1014,71 +1204,88 @@ export function InboxShell({
         </header>
 
         <div className="relative min-h-0 flex-1 overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
-        <div className="absolute inset-0 hidden lg:block">
+        <div className="absolute inset-0 hidden lg:flex">
+        <PrimaryNav
+          active={primaryView}
+          onChange={setPrimaryView}
+          inboxCount={laneThreads.length}
+        />
         <Group
           orientation="horizontal"
-          className="h-full w-full"
+          className="h-full min-w-0 flex-1"
           defaultLayout={savedLayout ?? DEFAULT_LAYOUT}
           onLayoutChanged={onLayoutChanged}
           resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
         >
-          <Panel id="list" defaultSize="22%" minSize="15%" maxSize="40%" className="min-w-0">
-            {renderListPanel(false)}
-          </Panel>
-
-          <ResizeHandle />
-
-          <Panel id="main" defaultSize="48%" minSize="30%" className="min-w-0">
-            {renderThreadPanel()}
-          </Panel>
-
-          <ResizeHandle />
-
-          <Panel id="sidebar" defaultSize="30%" minSize="20%" maxSize="45%" className="min-w-0">
-            <Group
-              orientation="vertical"
-              id={SIDEBAR_LAYOUT_ID}
-              className="h-full"
-              defaultLayout={savedSidebarLayout ?? DEFAULT_SIDEBAR_LAYOUT}
-              onLayoutChanged={onSidebarLayoutChanged}
-              resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
-            >
-              <Panel id="agent" defaultSize="38%" minSize="12%" maxSize="75%" className="min-h-0">
-                <AgentChatPanel />
+          {primaryView === "inbox" && (
+            <>
+              <Panel id="list" defaultSize="22%" minSize="15%" maxSize="40%" className="min-w-0">
+                {renderListPanel(false)}
               </Panel>
-              <ResizeHandle orientation="vertical" />
-              <Panel id="calendar" defaultSize="62%" minSize="28%" className="min-h-0">
-                <CalendarPanel
-                  events={calendarEvents}
-                  searchQuery={calendarSearch}
-                  onSearchChange={setCalendarSearch}
-                  onDefrag={() =>
-                    showUndo("Defrag view coming soon", () => {
-                      /* noop */
-                    })
-                  }
-                />
-              </Panel>
-            </Group>
+              <ResizeHandle />
+            </>
+          )}
+
+          <Panel
+            id="main"
+            defaultSize={primaryView === "inbox" ? "48%" : "70%"}
+            minSize="30%"
+            className="min-w-0"
+          >
+            {primaryView === "brief" && (
+              <DailyBriefPanel
+                userEmail={userEmail}
+                provider={provider}
+                invalidationKey={briefInvalidationKey}
+                onAction={handleSuggestedAction}
+              />
+            )}
+            {primaryView === "inbox" && renderThreadPanel()}
+            {primaryView === "calendar" && renderCalendarContent()}
           </Panel>
+
+          {primaryView !== "calendar" && (
+            <>
+              <ResizeHandle />
+              <Panel id="sidebar" defaultSize="30%" minSize="20%" maxSize="45%" className="min-w-0">
+                <Group
+                  orientation="vertical"
+                  id={SIDEBAR_LAYOUT_ID}
+                  className="h-full"
+                  defaultLayout={savedSidebarLayout ?? DEFAULT_SIDEBAR_LAYOUT}
+                  onLayoutChanged={onSidebarLayoutChanged}
+                  resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
+                >
+                  <Panel id="agent" defaultSize="38%" minSize="12%" maxSize="75%" className="min-h-0">
+                    <AgentChatPanel />
+                  </Panel>
+                  {primaryView === "inbox" && (
+                    <>
+                      <ResizeHandle orientation="vertical" />
+                      <Panel id="calendar" defaultSize="62%" minSize="28%" className="min-h-0">
+                        {renderCalendarContent()}
+                      </Panel>
+                    </>
+                  )}
+                </Group>
+              </Panel>
+            </>
+          )}
         </Group>
         </div>
 
         <div className="flex h-full flex-col lg:hidden">
-          {mobileTab === "inbox" && !mobileThreadOpen && renderListPanel(true)}
-          {mobileTab === "inbox" && mobileThreadOpen && renderThreadPanel(() => setMobileThreadOpen(false))}
-          {mobileTab === "calendar" && (
-            <CalendarPanel
-              events={calendarEvents}
-              searchQuery={calendarSearch}
-              onSearchChange={setCalendarSearch}
-              onDefrag={() =>
-                showUndo("Defrag view coming soon", () => {
-                  /* noop */
-                })
-              }
+          {mobileTab === "brief" && (
+            <DailyBriefPanel
+              userEmail={userEmail}
+              provider={provider}
+              invalidationKey={briefInvalidationKey}
+              onAction={handleSuggestedAction}
             />
           )}
+          {mobileTab === "inbox" && !mobileThreadOpen && renderListPanel(true)}
+          {mobileTab === "inbox" && mobileThreadOpen && renderThreadPanel(() => setMobileThreadOpen(false))}
+          {mobileTab === "calendar" && renderCalendarContent()}
           {mobileTab === "agent" && <AgentChatPanel />}
         </div>
         </div>
@@ -1151,6 +1358,9 @@ export function InboxShell({
           onChange={(tab) => {
             setMobileTab(tab);
             setMobileThreadOpen(false);
+            if (tab === "brief") setPrimaryView("brief");
+            if (tab === "inbox") setPrimaryView("inbox");
+            if (tab === "calendar") setPrimaryView("calendar");
           }}
         />
         <MobileCommandFab modLabel={modLabel} onOpenPalette={() => setPaletteOpen(true)} />

@@ -31,7 +31,15 @@ export const AI_PROVIDER_CONFIG = {
 >;
 
 export const AI_PROVIDER_STORAGE_KEY = "command-inbox-ai-provider-v2";
-export const DEFAULT_AI_PROVIDER: AiProvider = "openai";
+
+function readDefaultAiProvider(): AiProvider {
+  const fromEnv =
+    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER : undefined;
+  if (fromEnv === "gemini" || fromEnv === "openai") return fromEnv;
+  return "openai";
+}
+
+export const DEFAULT_AI_PROVIDER: AiProvider = readDefaultAiProvider();
 
 export function isAiProvider(value: string): value is AiProvider {
   return AI_PROVIDER_IDS.includes(value as AiProvider);

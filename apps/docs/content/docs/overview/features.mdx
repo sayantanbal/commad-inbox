@@ -1,0 +1,103 @@
+---
+title: Features
+description: Full feature list and hackathon bonus rubric coverage
+---
+
+## Core features
+
+### Authentication and multi-tenancy
+
+- Google sign-in via **Better Auth**
+- One **Corsair tenant per user** — credentials encrypted with `CORSAIR_KEK`
+- Onboarding flow connects Gmail and Google Calendar through chained OAuth
+
+### AI triage lanes
+
+Inbound mail is classified into four lanes:
+
+| Lane | Meaning | Typical content |
+|------|---------|-----------------|
+| **Reply** | Needs a written response | Questions, decisions, follow-ups |
+| **Schedule** | Meeting coordination | Proposed times, invite requests, reschedules |
+| **FYI** | Informational | Newsletters, receipts, CC-only updates |
+| **Done** | Archived / completed | Threads you archived with `E` |
+
+Classification runs on webhook events and during initial inbox backfill. Each thread gets a **priority** (high / medium / low) and optional **scheduling intent** (proposed times, attendees, duration).
+
+### Semantic search
+
+Press **`/`** to search classified threads by meaning, not just keywords. Embeddings are stored in **pgvector** (768 dimensions). Results respect your selected AI provider.
+
+### Advanced Gmail search
+
+Press **`Mod+Shift+F`** to query your full Gmail mailbox via Corsair's Gmail API integration — filter by sender, date range, lane, attachments, and free-text query.
+
+### Hero workflow — email to meeting
+
+Press **`M`** on a thread to:
+
+1. Extract scheduling intent from the thread (AI)
+2. Show your calendar availability for proposed windows
+3. Create a Google Calendar event with Meet link
+4. Generate a confirmation reply draft
+
+Reschedule with **`M`** again on a thread that already has a linked meeting. Cancel via the command palette.
+
+### Agent chat
+
+An in-app agent uses **Corsair MCP tools** to read mail, inspect schemas, and run scripts against Gmail and Calendar. Destructive **`run_script`** actions require explicit user approval in the UI.
+
+Example prompt:
+
+> Send a calendar invite to friend@corsair.dev at 9 AM next Thursday and draft a confirmation reply.
+
+### Keyboard UX
+
+- **Superhuman-style** single-key navigation (`J` / `K`, `E`, `R`, `M`, `S`)
+- **Command palette** at `Mod+K`
+- **Shortcut cheat sheet** at `?` (`Shift+/`)
+- Context-aware gating — shortcuts disable when modals are open
+
+### Realtime updates
+
+Gmail **Pub/Sub push** → Corsair webhook handler → classify + embed → **Pusher** broadcast to the browser. Falls back to 5-second polling if Pusher is not configured.
+
+### Send later and snooze
+
+- **Snooze** threads with `S` — they reappear when the snooze expires
+- **Send later** queues outbound mail with a 5-second undo window
+- External cron hits `/api/cron/process-due` every minute to dispatch due sends and expire snoozes
+
+### Mobile and PWA
+
+- Responsive layout with **mobile tabs** (Inbox / Thread / Calendar)
+- **Swipe gestures** on thread list
+- **PWA manifest** for add-to-home-screen on Android
+
+### Multi-provider AI
+
+- **OpenAI** (`gpt-5-nano`) is the default chat model
+- **Gemini** (`gemini-2.5-flash`) fallback on rate limits or quota errors
+- Provider switcher in the UI; switching embedding provider triggers a **background re-embed job**
+
+## Bonus rubric checklist
+
+| Bonus task | Status |
+|------------|--------|
+| MCP agent chat with approval UI | Done |
+| Gmail + Calendar webhooks | Done |
+| Command palette (`Mod+K`) | Done |
+| Keyboard shortcut registry + cheat sheet | Done |
+| AI priority triage lanes | Done |
+| Corsair Gmail advanced search UI | Done |
+| pgvector semantic search (`/`) | Done |
+| PWA + mobile tabs / swipe gestures | Done |
+| Send-later + snooze cron | Done |
+| Multi-provider AI fallback | Done |
+
+## Corsair SDK features used
+
+- Gmail + Google Calendar plugins (embedded SDK, multi-tenant)
+- Webhook-driven cache sync
+- MCP adapter (`list_operations`, `get_schema`, `run_script`)
+- Gmail `threads.list` for advanced search

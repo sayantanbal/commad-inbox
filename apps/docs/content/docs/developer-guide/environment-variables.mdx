@@ -1,0 +1,75 @@
+---
+title: Environment variables
+description: Phase-gated configuration — what to set and when
+---
+
+Command Inbox validates environment variables at boot via Zod in `src/lib/env.ts`. Blank optional vars are treated as undefined.
+
+For the complete reference with validation rules and examples, see [Environment reference](/docs/reference/environment).
+
+## Phase 0 — Infrastructure (required to boot)
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `DATABASE_URL` | Yes | Neon pooled Postgres URL with `?sslmode=require` |
+| `CORSAIR_KEK` | Yes | Base64 encryption key — `openssl rand -base64 32` |
+| `GOOGLE_CLIENT_ID` | Yes | Must end with `.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
+| `BETTER_AUTH_URL` | Yes | Default `http://localhost:3000` |
+| `APP_URL` | No | Defaults to `BETTER_AUTH_URL`; use for webhooks/OAuth |
+
+## Phase 1 — Authentication
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `BETTER_AUTH_SECRET` | Yes for sign-in | Min 32 chars — `openssl rand -base64 32` |
+| `BETTER_AUTH_API_KEY` | No | Better Auth infra/Dash only |
+
+`assertPhase1Env()` throws if `BETTER_AUTH_SECRET` is missing when auth routes run.
+
+## Phase 2 — AI, webhooks, realtime
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | One of two | Gemini classify + embed |
+| `OPENAI_API_KEY` | One of two | OpenAI chat + embed (default provider) |
+| `GMAIL_PUBSUB_TOPIC` | For webhooks | `projects/<project>/topics/<name>` |
+| `PUSHER_APP_ID` | Optional | Server-side Pusher |
+| `PUSHER_KEY` | Optional | Server-side |
+| `PUSHER_SECRET` | Optional | Server-side |
+| `PUSHER_CLUSTER` | Optional | e.g. `us2` |
+| `NEXT_PUBLIC_PUSHER_KEY` | Optional | Browser client |
+| `NEXT_PUBLIC_PUSHER_CLUSTER` | Optional | Must match server cluster |
+
+`assertPhase2Env()` requires at least one AI key for classification, drafts, search, and agent.
+
+Without Pusher, inbox falls back to **5-second polling**.
+
+## Phase 3+ — Cron
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `CRON_SECRET` | For send-later | Bearer token for `/api/cron/process-due` |
+
+Generate: `openssl rand -base64 32`
+
+## Production overrides
+
+| Variable | Local | Production |
+|----------|-------|------------|
+| `BETTER_AUTH_URL` | `http://localhost:3000` | `https://command-inbox.sayantanbal.in` |
+| `APP_URL` | ngrok URL in dev | Same as production app URL |
+| `DATABASE_URL` | Neon dev branch | Neon production branch |
+
+## Client-safe variables
+
+Only `NEXT_PUBLIC_*` vars are exposed to the browser. Never import `@/lib/env` from client components — it uses `server-only` and will break client bundles or leak validation errors.
+
+## Restart after changes
+
+After editing `.env.local`, **restart the dev server**. Next.js does not hot-reload env changes.
+
+## Related
+
+- [Environment reference](/docs/reference/environment) — full spec
+- [Deploy to production](/docs/developer-guide/deploy-production)

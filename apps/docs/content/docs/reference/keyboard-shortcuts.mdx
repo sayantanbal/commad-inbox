@@ -1,0 +1,85 @@
+---
+title: Keyboard shortcuts
+description: Complete shortcut registry from src/lib/shortcuts.ts
+---
+
+Source: `src/lib/shortcuts.ts`. **Mod** = `⌘` on Mac, `Ctrl` on Windows/Linux.
+
+## Registry
+
+| ID | Key | Mod | Shift | Context | Action | Requires thread | Palette only |
+|----|-----|-----|-------|---------|--------|-----------------|--------------|
+| `next-thread` | `j` | | | list | `nextThread` | | |
+| `prev-thread` | `k` | | | list | `prevThread` | | |
+| `archive` | `e` | | | thread | `archive` | yes | |
+| `reply` | `r` | | | thread | `reply` | yes | |
+| `meeting` | `m` | | | thread | `meeting` | yes | |
+| `snooze` | `s` | | | thread | `snooze` | yes | |
+| `search` | `/` | | | global | `search` | | |
+| `help` | `/` | | yes | global | `help` | | |
+| `select` | `x` | | | list | `select` | | |
+| `palette` | `k` | yes | | global | `palette` | | |
+| `advanced-search` | `f` | yes | yes | global | `advancedSearch` | | |
+| `send` | `Enter` | yes | | composer | `send` | | |
+| `cancel-composer` | `Escape` | | | composer | `cancelComposer` | | |
+| `cancel-meeting` | — | | | thread | `cancelMeeting` | yes | yes |
+
+## Hotkey bindings (react-hotkeys-hook)
+
+Internal binding format from `toHotkeyBinding()`:
+
+| Shortcut | Binding |
+|----------|---------|
+| next-thread | `j` |
+| prev-thread | `k` |
+| archive | `e` |
+| reply | `r` |
+| meeting | `m` |
+| snooze | `s` |
+| search | `/` |
+| help | `shift+/` |
+| select | `x` |
+| palette | `mod+k` |
+| advanced-search | `mod+shift+f` |
+| send | `mod+enter` |
+| cancel-composer | `escape` |
+
+## Gating logic (`isShortcutEnabled`)
+
+1. `paletteOnly` shortcuts never bind to keys
+2. Single-key shortcuts disabled when any overlay open (composer, palette, snooze, availability, cheatsheet, search, advanced search)
+3. `requiresThread` shortcuts need `selectedThreadId`
+4. Composer context shortcuts only when composer open
+5. Non-global, non-composer shortcuts blocked while composer open
+
+## Helper functions
+
+| Function | Purpose |
+|----------|---------|
+| `getShortcutsByContext(context)` | Filter by `global` \| `list` \| `thread` \| `composer` |
+| `getPaletteShortcuts()` | All except send/cancel-composer |
+| `formatShortcut(shortcut, isMac)` | Display string for cheat sheet |
+| `isSingleKeyLayerOpen(state)` | Whether modals block single-key shortcuts |
+
+## ShortcutContext type
+
+```typescript
+type ShortcutContext = "global" | "list" | "thread" | "composer";
+```
+
+## ShortcutGateState
+
+Used by `useInboxShortcuts` hook:
+
+```typescript
+interface ShortcutGateState {
+  composerOpen: boolean;
+  paletteOpen: boolean;
+  snoozeOpen: boolean;
+  availabilityOpen: boolean;
+  cheatsheetOpen: boolean;
+  searchOpen: boolean;
+  advancedSearchOpen: boolean;
+  selectedThreadId: string | null;
+}
+```

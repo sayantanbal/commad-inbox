@@ -1,0 +1,93 @@
+---
+title: Corsair setup
+description: Multi-tenant OAuth, CORSAIR_KEK, and integration initialization
+---
+
+Command Inbox uses the **Corsair SDK** as the integration layer for Gmail and Google Calendar. Each Better Auth user becomes a **Corsair tenant** with isolated OAuth tokens.
+
+## CORSAIR_KEK
+
+The key encryption key protects OAuth tokens at rest in Postgres.
+
+```bash
+openssl rand -base64 32
+```
+
+Set as `CORSAIR_KEK` in env. Rules:
+
+1. Generate **once** per environment (local vs production use different keys)
+2. **Never rotate** casually — existing tokens become unreadable
+3. If you must rotate, run `bun run corsair:reset` and have all users reconnect
+
+## corsair:setup
+
+After migrations:
+
+```bash
+bun run corsair:setup
+```
+
+This script (`scripts/corsair-setup.ts`):
+
+- Initializes Corsair database schema
+- Registers Gmail and Google Calendar plugin configurations
+- Persists integration keys (including Pub/Sub topic if `GMAIL_PUBSUB_TOPIC` is set)
+
+## OAuth flow
+
+### App sign-in (Better Auth)
+
+Standard Google OAuth for app authentication → `/api/auth/callback/google`
+
+### Gmail + Calendar connect (Corsair)
+
+1. User clicks Connect on `/onboarding/connect`
+2. `GET /api/connect/google` starts Gmail OAuth
+3. Callback at `/api/auth/callback/corsair` exchanges code
+4. If Calendar not connected, chains to Calendar OAuth
+5. On full connect + backfill → redirect to `/inbox`
+
+Production redirect URIs must include:
+
+```
+https://<app-domain>/api/auth/callback/corsair
+```
+
+## Tenant model
+
+| Concept | Value |
+|---------|-------|
+| Better Auth user ID | Primary user identifier |
+| Corsair tenant ID | Same as user ID |
+| Webhook URL | `{APP_URL}/api/webhooks?tenantId={userId}` |
+
+## Smoke test
+
+Verify Corsair can reach Google APIs:
+
+```bash
+bun run smoke:corsair
+```
+
+Requires a connected user with valid tokens in the database.
+
+## Gmail watch
+
+Register push notifications after connect:
+
+```bash
+bun run gmail:watch
+```
+
+Or via Gmail API `users.watch` — see [Webhooks & realtime](/docs/developer-guide/webhooks-realtime).
+
+Watches expire after ~7 days and must be renewed.
+
+## KEK mismatch error
+
+If `/api/connect/google` redirects with `?error=kek_mismatch`, the `CORSAIR_KEK` changed since tokens were encrypted. Run `corsair:reset` and reconnect.
+
+## Related
+
+- [Webhooks & realtime](/docs/developer-guide/webhooks-realtime)
+- [Corsair MCP tools](/docs/reference/corsair-mcp-tools)

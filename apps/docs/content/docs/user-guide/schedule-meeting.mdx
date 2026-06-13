@@ -1,0 +1,93 @@
+---
+title: Schedule a meeting
+description: Hero workflow — press M to turn email into a calendar invite
+---
+
+The **`M`** shortcut is Command Inbox's signature workflow. It converts a scheduling email into a Google Calendar event plus a confirmation reply draft.
+
+## When to use M
+
+- Thread is in the **Schedule** lane (or any email discussing meeting times)
+- You want to propose a concrete slot and send an invite
+- You need to **reschedule** an existing linked meeting (press **`M`** again on the same thread)
+
+## Step-by-step
+
+### 1. Select a thread
+
+Use **`J`** / **`K`** or click a thread with scheduling content.
+
+### 2. Press M
+
+The **availability panel** opens. AI has already extracted:
+
+- **Attendees** from the thread (To/Cc/from addresses)
+- **Proposed times** mentioned in the email body
+- **Duration** (default 30 minutes if not specified)
+
+### 3. Review your calendar
+
+The week-strip calendar highlights busy vs free time. Suggested slots from the email are marked when parseable.
+
+### 4. Pick a slot
+
+Click an available time slot. Duration can be adjusted (15–240 minutes).
+
+### 5. Confirm
+
+On confirm:
+
+1. Google Calendar event is created (with Google Meet link when available)
+2. `thread_meetings` links the thread to the event
+3. AI generates a **confirmation reply draft** in the composer
+4. Thread classification may update
+
+Press **`Mod+Enter`** to send the confirmation, or edit first.
+
+## Reschedule
+
+If the thread **already has a linked meeting**:
+
+- **`M`** opens reschedule mode instead of create
+- Pick a new slot → existing event updates
+- New confirmation draft is generated
+
+Attempting to create a duplicate meeting returns a 409 error — use reschedule instead.
+
+## Cancel a meeting
+
+Open the command palette (**`Mod+K`**) and choose **Cancel linked meeting**. This deletes the Google Calendar event and clears the thread link.
+
+## What the AI reads
+
+Scheduling intent is stored on the classification row:
+
+```json
+{
+  "proposedTimes": ["2026-06-20T14:00:00.000Z"],
+  "attendees": ["guest@example.com"],
+  "duration": 30,
+  "confidence": 0.85
+}
+```
+
+If no attendees are found, the API returns **400 — No attendees found for this thread**.
+
+## Draft fallback
+
+If AI quota is exhausted, confirmation drafts fall back to a **template** rather than failing silently. The meeting still creates; only draft quality degrades.
+
+## API reference
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/api/inbox/meeting` | Create meeting + draft |
+| `PATCH` | `/api/inbox/meeting` | Reschedule |
+| `DELETE` | `/api/inbox/meeting` | Cancel linked event |
+
+See [API routes](/docs/reference/api-routes) for request/response bodies.
+
+## Related
+
+- [Triage lanes](/docs/user-guide/triage-lanes) — Schedule lane
+- [Agent chat](/docs/user-guide/agent-chat) — natural-language alternative

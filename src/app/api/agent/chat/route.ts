@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const provider = parsed.data.provider;
 
   try {
-    const tools = buildAgentMcpTools(auth.tenant, auth.userId);
+    const tools = buildAgentMcpTools(auth.tenant, auth.userId, auth.userEmail);
     const activeProvider = resolveAgentModelProvider(provider);
     const model = getChatModel(activeProvider);
     if (!model) {

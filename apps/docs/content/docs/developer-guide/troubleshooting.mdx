@@ -1,0 +1,130 @@
+---
+title: Troubleshooting
+description: Common errors and fixes for local and production
+---
+
+## Environment and build
+
+### Invalid environment variables in browser
+
+**Symptom:** Runtime error mentioning `Invalid environment variables` in the client.
+
+**Cause:** Client code imported `@/lib/env` (server-only module).
+
+**Fix:**
+
+1. Remove env imports from client components
+2. Use `NEXT_PUBLIC_*` vars or API routes for client needs
+3. Restart dev server after `.env.local` changes
+
+### Cannot find module './873.js'
+
+**Symptom:** Next.js crash with missing webpack chunk.
+
+**Cause:** Stale `.next` cache after dependency or route changes.
+
+**Fix:**
+
+```bash
+rm -rf .next && bun dev
+```
+
+### Dev server on unexpected port
+
+**Symptom:** App runs on 3001 instead of 3000.
+
+**Fix:** Check terminal output. Update ngrok and OAuth redirect URIs to match the active port.
+
+## Authentication
+
+### 500 on sign-in (production)
+
+Check:
+
+- `BETTER_AUTH_SECRET` is set (32+ chars)
+- `BETTER_AUTH_URL` matches deployed domain exactly
+- Google OAuth redirect URIs include `/api/auth/callback/google`
+
+### Redirect loop
+
+OAuth redirect URI mismatch between Google Console and `BETTER_AUTH_URL`.
+
+### kek_mismatch on connect
+
+`CORSAIR_KEK` changed since tokens were stored. Run `bun run corsair:reset` locally (never casually in prod) and reconnect Google.
+
+## Inbox and Corsair
+
+### Empty inbox after connect
+
+1. Run `bun run corsair:setup` against the active database
+2. Verify Gmail + Calendar both show connected on onboarding
+3. Check Vercel/server logs for Corsair errors
+
+### Google not connected (403)
+
+User session exists but Gmail or Calendar OAuth incomplete. Return to `/onboarding/connect`.
+
+## AI features
+
+### AI draft unavailable / template fallback
+
+**Symptom:** Drafts work but `source: "template"` in API response.
+
+**Cause:** Both OpenAI and Gemini quota exhausted or keys missing.
+
+**Fix:** Add billing/credits to at least one provider. Set keys in Vercel env for production.
+
+### Agent chat 503
+
+At least one AI key required. Verify `OPENAI_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` in env.
+
+### Empty semantic search
+
+Possible causes:
+
+| Cause | Fix |
+|-------|-----|
+| Backfill incomplete | Wait for activity banner |
+| Provider switch mid-search | Wait for re-embed job |
+| No matching threads | Try broader query |
+| AI key missing | Set Phase 2 env vars |
+
+## Webhooks
+
+### Webhooks never fire
+
+1. Verify `GMAIL_PUBSUB_TOPIC` in env
+2. Check Pub/Sub IAM binding for `gmail-api-push@system.gserviceaccount.com`
+3. Confirm `APP_URL` matches webhook subscription endpoint
+4. Renew Gmail watch (`bun run gmail:watch`) — expires ~7 days
+5. Inspect `webhook_logs` table
+
+### Classification delayed
+
+Normal latency is up to ~30 seconds (Pub/Sub + classify). Without Pusher, UI updates on 5s poll interval.
+
+## Cron and send-later
+
+### Send-later never sends
+
+Configure external cron:
+
+```
+POST /api/cron/process-due
+Authorization: Bearer $CRON_SECRET
+```
+
+Every 1 minute. Verify `CRON_SECRET` matches in Vercel and cron-job.org.
+
+## Performance
+
+### Slow /inbox load in dev
+
+SSR + Corsair cache hydration can take 15–20s in development. Production on Vercel is typically faster. Not yet optimized for dev cold starts.
+
+## Getting help
+
+1. Check [API routes](/docs/reference/api-routes) for expected request/response
+2. Use Drizzle Studio: `bun run db:studio`
+3. Inspect Vercel function logs for `/api/webhooks` and `/api/agent/chat`

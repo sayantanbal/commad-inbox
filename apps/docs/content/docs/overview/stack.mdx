@@ -1,0 +1,82 @@
+---
+title: Stack
+description: Technologies, libraries, and version choices
+---
+
+## Application layer
+
+| Technology | Role |
+|------------|------|
+| **Next.js 15** | App Router, RSC, API route handlers |
+| **React 19** | UI components |
+| **TypeScript** | End-to-end type safety |
+| **Tailwind CSS 4** | Styling |
+| **shadcn/ui + Radix** | Accessible primitives (dialogs, tooltips, command palette) |
+| **Framer Motion** | Panel transitions and micro-interactions |
+| **TipTap** | Rich-text email composer |
+| **react-hotkeys-hook** | Keyboard shortcut bindings |
+
+## Data layer
+
+| Technology | Role |
+|------------|------|
+| **Neon Postgres** | Primary database (serverless, pooled connections) |
+| **pgvector** | Vector similarity search for semantic inbox search |
+| **Drizzle ORM** | Schema, migrations, typed queries |
+| **Corsair cache tables** | Gmail/Calendar data synced by Corsair SDK |
+
+## Integrations
+
+| Technology | Role |
+|------------|------|
+| **Corsair SDK** | Gmail + GCal plugins, webhooks, tenant isolation |
+| `@corsair-dev/gmail` | Gmail read/write, watch, threads.list |
+| `@corsair-dev/googlecalendar` | Events, free/busy, Meet links |
+| `@corsair-dev/mcp` | MCP tool definitions for agent |
+| **Better Auth** | Google OAuth sign-in, session management |
+| **Pusher Channels** | Realtime inbox updates (optional; polling fallback) |
+
+## AI layer
+
+| Technology | Role |
+|------------|------|
+| **Vercel AI SDK** (`ai` package) | `streamText`, tool calling, UI message streams |
+| `@ai-sdk/openai` | GPT-5 Nano chat + text-embedding-3-small |
+| `@ai-sdk/google` | Gemini 2.5 Flash chat + text-embedding-004 |
+| `@ai-sdk/react` | Client-side chat hooks for agent panel |
+
+Default models are defined in `src/lib/ai/providers.ts`:
+
+| Provider | Chat model | Embedding model | Dimensions |
+|----------|------------|-----------------|------------|
+| OpenAI (default) | `gpt-5-nano` | `text-embedding-3-small` | 768 |
+| Gemini (fallback) | `gemini-2.5-flash` | `text-embedding-004` | 768 |
+
+## Runtime and tooling
+
+| Tool | Role |
+|------|------|
+| **Bun** | Package manager and script runner |
+| **Vercel** | Production hosting |
+| **ESLint** | Linting (`eslint-config-next`) |
+| **Drizzle Kit** | Migration authoring (`drizzle-kit studio`) |
+
+## Documentation site
+
+| Technology | Role |
+|------------|------|
+| **Fumadocs** | MDX docs framework (`apps/docs`) |
+| **Separate Vercel project** | `docs.command-inbox.sayantanbal.in` |
+
+## Phase-gated capabilities
+
+Features unlock as environment variables are configured:
+
+| Phase | Requirements | Unlocks |
+|-------|--------------|---------|
+| **0** | `DATABASE_URL`, `CORSAIR_KEK`, Google OAuth | DB, Corsair setup, smoke tests |
+| **1** | `BETTER_AUTH_SECRET` | Sign-in, sessions |
+| **2** | AI key + optional Pub/Sub + Pusher | Classification, embeddings, webhooks, semantic search |
+| **3+** | `CRON_SECRET` + external cron | Send-later dispatch, snooze expiry |
+
+See [Environment variables](/docs/developer-guide/environment-variables) for the full list.

@@ -100,6 +100,30 @@ const uiMessageSchema = z.object({
 export const agentChatBodySchema = strictObject({
   messages: z.array(uiMessageSchema).default([]),
   provider: aiProviderSchema.default("openai"),
+  conversationId: z.string().min(1).optional(),
+});
+
+export const conversationIdBodySchema = strictObject({
+  conversationId: z.string().min(1, "conversationId is required"),
+});
+
+export const threadSummaryBodySchema = strictObject({
+  threadId: threadIdField,
+  provider: aiProviderSchema.default("openai"),
+});
+
+export const saveConversationBodySchema = strictObject({
+  messages: z.array(uiMessageSchema),
+});
+
+export const focusBlockBodySchema = strictObject({
+  start: z.string().datetime(),
+  durationMinutes: z.number().int().min(15).max(480).default(90),
+  summary: z.string().trim().min(1).max(120).optional(),
+});
+
+export const focusBlockDeleteBodySchema = strictObject({
+  eventId: z.string().min(1),
 });
 
 export const reembedBodySchema = strictObject({

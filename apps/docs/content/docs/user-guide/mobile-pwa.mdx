@@ -1,0 +1,59 @@
+---
+title: Mobile and PWA
+description: Tabs, swipe gestures, and install as an app
+---
+
+Command Inbox is **mobile-responsive** with patterns borrowed from native mail apps.
+
+## Mobile layout
+
+On narrow viewports the three-pane desktop layout collapses into **bottom tabs**:
+
+| Tab | Content |
+|-----|---------|
+| **Inbox** | Lane tabs + thread list |
+| **Thread** | Selected message + composer |
+| **Calendar** | Week strip / day view |
+
+Tap a thread in Inbox to switch to the Thread tab automatically.
+
+## Swipe gestures
+
+On the thread list:
+
+- **Swipe left** — archive (same as **`E`**)
+- **Swipe right** — snooze picker (same as **`S`**)
+
+Gestures require a touch device; they do not conflict with desktop click selection.
+
+## Floating action button
+
+A **FAB** on mobile exposes primary actions when a thread is selected — reply, meeting, archive — for users without a hardware keyboard.
+
+## PWA (Progressive Web App)
+
+The app ships a **web app manifest** and icons for add-to-home-screen:
+
+### Android (Chrome)
+
+1. Open the app in Chrome
+2. Menu → **Install app** or **Add to Home screen**
+3. Launch from home screen in standalone mode
+
+### iOS (Safari)
+
+1. Share → **Add to Home Screen**
+2. Limited PWA support — no push notifications via Pusher Beams (app uses Pusher **Channels**, not Beams)
+
+## Keyboard on mobile
+
+External keyboards (iPad, Android tablet) support the full shortcut set. On-screen keyboards use tap targets and FAB instead.
+
+## Performance notes
+
+Initial `/inbox` load may be slower in development (~15–20s observed) due to SSR and Corsair cache hydration. Production on Vercel is typically faster.
+
+## Related
+
+- [Getting started](/docs/user-guide/getting-started)
+- [Keyboard shortcuts](/docs/user-guide/keyboard-shortcuts)

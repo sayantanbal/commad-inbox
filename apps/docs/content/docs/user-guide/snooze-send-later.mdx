@@ -1,0 +1,77 @@
+---
+title: Snooze and send later
+description: Defer threads and queue outbound mail with undo
+---
+
+## Snooze
+
+Press **`S`** on a selected thread to snooze it.
+
+### What snooze does
+
+1. Thread disappears from active lanes until the snooze time
+2. A `snoozes` row is stored with `snoozedUntil`
+3. Thread remains in Gmail — snooze is app-side visibility only
+
+### Picking a snooze time
+
+The snooze picker offers presets (later today, tomorrow, next week) or custom datetime.
+
+### Waking up
+
+When `snoozedUntil` passes:
+
+- Cron job (`/api/cron/process-due`) deletes expired snooze rows
+- Thread reappears in its classified lane on next refresh or Pusher update
+
+### Cancel snooze
+
+Use the snooze UI or `DELETE /api/inbox/snooze` with `{ "threadId": "..." }`.
+
+## Send later
+
+When composing a reply, you can schedule outbound mail instead of sending immediately.
+
+### Undo window
+
+Default send flow uses a **5-second undo window**:
+
+1. You press **`Mod+Enter`**
+2. Send is **queued** with `sendAt = now + 5s`
+3. Toast offers **Undo** — cancel via `DELETE /api/inbox/send`
+4. After 5s, cron dispatches the message via Gmail
+
+If you set an explicit future `sendAt`, there is no undo window (`undoWindowMs: 0`).
+
+### Dispatch immediately
+
+`PUT /api/inbox/send` with `scheduledSendId` forces immediate send before cron picks it up.
+
+### Cron requirement
+
+Send-later and snooze expiry require an **external cron** pinging:
+
+```
+POST /api/cron/process-due
+Authorization: Bearer $CRON_SECRET
+```
+
+Every **1 minute** (Vercel Hobby cron is daily-only — use [cron-job.org](https://cron-job.org)).
+
+See [Deploy to production](/docs/developer-guide/deploy-production).
+
+## Status tracking
+
+Scheduled sends have status:
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Waiting for `sendAt` |
+| `sent` | Successfully dispatched |
+| `cancelled` | User cancelled during undo window |
+| `failed` | Gmail send error |
+
+## Related
+
+- [Keyboard shortcuts](/docs/user-guide/keyboard-shortcuts) — **`S`** and **`Mod+Enter`**
+- [API routes — snooze & send](/docs/reference/api-routes)

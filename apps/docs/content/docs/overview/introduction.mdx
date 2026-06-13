@@ -1,0 +1,56 @@
+---
+title: Introduction
+description: Product thesis — why Command Inbox exists and what problem it solves
+---
+
+## The problem
+
+For people whose inbox is really a **meeting pipeline** — founders, recruiters, consultants, agency owners — a large share of email work is scheduling coordination: *"does Tuesday work?"*, *"sending an invite"*, *"rescheduling"*, *"following up"*. Gmail and Google Calendar are two disconnected apps, so this loop often takes ten or more clicks per meeting.
+
+Tools like Superhuman make email faster, but they still treat email and calendar as separate worlds.
+
+## The solution
+
+Command Inbox merges Gmail and Google Calendar into one **keyboard-driven surface**. The core insight:
+
+> Every email is either a **reply**, a **meeting**, or **noise**.
+
+The app triages your inbox into exactly those lanes using AI, and makes the email→meeting conversion a single keystroke.
+
+## Hero workflow
+
+This is the demo moment judges should look for:
+
+1. Open an email thread with scheduling language
+2. Press **`M`**
+3. AI reads the thread, extracts proposed times and attendees, and shows your calendar availability inline
+4. Press **Enter** on a slot
+5. Calendar invite is sent and an AI-drafted confirmation reply is queued
+
+Roughly **three seconds** versus **two minutes** in Gmail + Google Calendar separately.
+
+## What makes it different
+
+| Capability | Command Inbox | Typical Gmail client |
+|------------|---------------|----------------------|
+| Email + calendar in one view | Yes — week strip + thread pane | Separate apps |
+| AI triage lanes | Reply / Schedule / FYI / Done | Manual labels or none |
+| One-keystroke meeting | `M` with inline availability | Copy-paste between apps |
+| Semantic search over triaged mail | `/` with pgvector | Gmail search only |
+| Agent with Gmail + Calendar tools | Corsair MCP + approval UI | Not available |
+| Keyboard-first UX | Superhuman-style shortcuts | Mouse-heavy |
+
+## Built for the Corsair hackathon
+
+Command Inbox is a reference implementation of the Corsair SDK stack:
+
+- **Gmail + Google Calendar plugins** for read/write mail and events
+- **Webhook-driven cache** so inbox reads hit Postgres, not live Google API on every keystroke
+- **MCP adapter** exposing Corsair operations to an in-app agent
+- **Multi-provider AI** (OpenAI + Gemini) for classification, drafts, embeddings, and chat
+
+## Next steps
+
+- **Evaluators:** Read [Features](/docs/overview/features) and [Architecture](/docs/overview/architecture)
+- **Users:** Jump to [Getting started](/docs/user-guide/getting-started)
+- **Developers:** Start with [Local development](/docs/developer-guide/local-development)

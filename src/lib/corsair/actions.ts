@@ -98,6 +98,40 @@ export async function createCalendarEventWithMeet(
   };
 }
 
+export async function createCalendarFocusBlock(
+  tenant: ReturnType<CorsairInstance["withTenant"]>,
+  params: {
+    summary?: string;
+    start: Date;
+    durationMinutes: number;
+  }
+): Promise<{ eventId: string; htmlLink?: string }> {
+  const end = addMinutes(params.start, params.durationMinutes);
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const created = await tenant.googlecalendar.api.events.create({
+    calendarId: "primary",
+    sendUpdates: "none",
+    event: {
+      summary: params.summary ?? "Focus time",
+      description: "Blocked for deep work via Command Inbox",
+      start: { dateTime: params.start.toISOString(), timeZone },
+      end: { dateTime: end.toISOString(), timeZone },
+      transparency: "opaque",
+      visibility: "private",
+    },
+  });
+
+  if (!created.id) {
+    throw new Error("Calendar create returned no event id");
+  }
+
+  return {
+    eventId: created.id,
+    htmlLink: created.htmlLink,
+  };
+}
+
 export async function updateCalendarEventTime(
   tenant: ReturnType<CorsairInstance["withTenant"]>,
   params: {

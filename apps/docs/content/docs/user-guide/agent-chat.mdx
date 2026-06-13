@@ -1,0 +1,76 @@
+---
+title: Agent chat
+description: Corsair MCP agent with tool approval for run_script
+---
+
+The **agent chat panel** lets you perform multi-step Gmail and Calendar operations in natural language. It uses Corsair MCP tools embedded in the Next.js server — no separate MCP server required.
+
+Toggle the panel from the inbox header.
+
+## What the agent can do
+
+Through Corsair MCP tools:
+
+| Tool | Purpose | Approval required |
+|------|---------|-------------------|
+| `list_operations` | Discover available Gmail/Calendar operations | No |
+| `get_schema` | Inspect operation input schemas | No |
+| `run_script` | Execute Corsair scripts (send mail, create events, etc.) | **Yes** |
+
+Destructive or write operations go through **`run_script`**, which pauses for your explicit approval before executing.
+
+## Example prompts
+
+**Schedule + draft (hackathon demo prompt):**
+
+> Send a calendar invite to friend@corsair.dev at 9 AM next Thursday and draft a confirmation reply.
+
+**Search and summarize:**
+
+> Find my last three emails from alice@company.com and summarize what they need from me.
+
+**Calendar check:**
+
+> What meetings do I have tomorrow afternoon?
+
+## Approval flow
+
+When the agent calls `run_script`:
+
+1. Stream pauses with an **approval card** showing the script and parameters
+2. You **Approve** or **Deny**
+3. On approve, the script runs against your Corsair tenant
+4. Results stream back into the chat
+
+Never approve scripts you do not understand — they run with your Google OAuth credentials.
+
+## Provider selection
+
+The agent uses the same **AI provider switcher** as drafts and classification (OpenAI default, Gemini fallback). Provider is sent with each chat request.
+
+## Streaming
+
+Responses stream token-by-token using the Vercel AI SDK UI message format. Tool calls appear as structured parts in the transcript.
+
+Maximum request duration: **60 seconds**.
+
+## Requirements
+
+- Gmail + Calendar fully connected
+- At least one AI API key configured server-side
+- Phase 2 env (`assertPhase2Env`)
+
+## Limitations
+
+- Agent operates on **your tenant only** — no cross-user access
+- Complex multi-day workflows may hit the 60s timeout
+- If both AI providers are quota-exhausted, chat fails with an error (no template fallback for chat)
+
+## API
+
+`POST /api/agent/chat` — see [API routes](/docs/reference/api-routes) and [Corsair MCP tools](/docs/reference/corsair-mcp-tools).
+
+## Related
+
+- [Schedule a meeting](/docs/user-guide/schedule-meeting) — faster for simple invite-from-thread cases
+- [Architecture — Agent chat flow](/docs/overview/architecture)

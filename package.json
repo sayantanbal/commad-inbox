@@ -2,7 +2,12 @@
   "name": "command-inbox",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
+    "docs:dev": "bun run --filter command-inbox-docs dev",
+    "docs:build": "bun run --filter command-inbox-docs build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -13,6 +18,8 @@
     "corsair:reset": "bun scripts/corsair-reset.ts",
     "smoke:corsair": "bun scripts/smoke-corsair.ts",
     "gmail:watch": "bun scripts/gmail-watch.ts",
+    "calendar:watch": "bun scripts/calendar-watch.ts",
+    "watches:renew": "bun scripts/renew-watches.ts",
     "phase0": "bun run db:migrate && bun run corsair:setup && bun run smoke:corsair"
   },
   "dependencies": {

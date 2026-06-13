@@ -1,0 +1,89 @@
+---
+title: AI configuration
+description: Models, provider chain, embeddings, and client storage
+---
+
+Source: `src/lib/ai/providers.ts`, `src/lib/ai/with-fallback.ts`, `src/lib/ai/generate.ts`, `src/lib/ai/embed.ts`.
+
+## Provider IDs
+
+```typescript
+const AI_PROVIDER_IDS = ["openai", "gemini"] as const;
+type AiProvider = "openai" | "gemini";
+```
+
+## Provider config
+
+| Key | label | chatLabel | chatModel | embedModel | dimensions |
+|-----|-------|-----------|-----------|------------|------------|
+| `gemini` | Gemini | Gemini 2.5 Flash | `gemini-2.5-flash` | `text-embedding-004` | 768 |
+| `openai` | OpenAI | GPT-5 Nano | `gpt-5-nano` | `text-embedding-3-small` | 768 |
+
+```typescript
+export const EMBEDDING_DIMENSIONS = 768;
+export const DEFAULT_AI_PROVIDER: AiProvider = "openai";
+export const AI_PROVIDER_STORAGE_KEY = "command-inbox-ai-provider-v2";
+```
+
+## Client storage
+
+User provider preference persists in `localStorage` under `command-inbox-ai-provider-v2`.
+
+Client-safe helpers live in `src/lib/ai/alternate-provider.ts` (no server-only imports).
+
+## Provider chain
+
+`getProviderChain(preferred: AiProvider): AiProvider[]`
+
+Returns `[preferred, alternate]` — typically `["openai", "gemini"]` or reversed if user selected Gemini.
+
+`withProviderFallback()` wraps async AI calls:
+
+1. Execute with primary provider
+2. On rate limit / quota / retryable error → retry with fallback
+3. Propagate error if both fail
+
+## Chat generation
+
+Uses Vercel AI SDK `generateText` / `streamText` with model instances from `@ai-sdk/openai` and `@ai-sdk/google`.
+
+## Embeddings
+
+`embedText(text, provider)` returns 768-dim vector.
+
+Stored on `classifications.embedding` with `embedding_provider` column tracking source.
+
+Re-embed: `src/lib/embeddings/reembed-inbox.ts` — batch updates all user classifications when provider switches.
+
+## Rate limiting
+
+`src/lib/ai/rate-limit.ts` — in-memory sliding window for burst protection during development.
+
+## Draft fallback
+
+`src/lib/ai/drafts.ts` — when AI generation fails, returns template HTML with `source: "template"`.
+
+## Server-only boundary
+
+These modules import `server-only`:
+
+- `src/lib/env.ts`
+- `src/lib/ai/models.ts`
+- `src/lib/ai/generate.ts`
+- `src/lib/ai/embed.ts`
+
+Client components must use API routes or `alternate-provider.ts` helpers.
+
+## Env dependency
+
+```typescript
+assertPhase2Env() // requires GOOGLE_GENERATIVE_AI_API_KEY || OPENAI_API_KEY
+```
+
+## parseAiProvider
+
+```typescript
+parseAiProvider(value: unknown, fallback = DEFAULT_AI_PROVIDER): AiProvider
+```
+
+Safely parses user/API input; invalid values fall back to `openai`.

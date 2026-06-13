@@ -1,0 +1,81 @@
+---
+title: Getting started
+description: Sign in, connect Google, and open your first inbox
+---
+
+## Prerequisites
+
+You need a Google account with Gmail and Google Calendar. For hackathon/demo environments, your email must be added as a **Test user** on the Google OAuth app (Testing mode).
+
+## Step 1 — Open the app
+
+Go to [command-inbox.sayantanbal.in](https://command-inbox.sayantanbal.in) (or your self-hosted URL).
+
+You land on the sign-in page if you are not authenticated.
+
+## Step 2 — Sign in with Google
+
+1. Click **Sign in with Google**
+2. Choose your Google account
+3. Grant the requested permissions for the app sign-in flow
+
+This creates your user record and Better Auth session. You are **not** yet connected to Gmail/Calendar for inbox operations.
+
+## Step 3 — Connect Google (Gmail + Calendar)
+
+After sign-in you are redirected to **Connect Google** (`/onboarding/connect`).
+
+1. Click **Connect Gmail**
+2. Complete Google OAuth for Gmail scopes
+3. If prompted, complete the chained OAuth for **Google Calendar**
+
+Both integrations must show as connected before the inbox loads.
+
+## Step 4 — Wait for backfill
+
+On first connect, Command Inbox classifies your latest **50 INBOX threads**. An activity banner shows progress.
+
+Backfill must complete before:
+
+- Semantic search (`/`) returns results
+- Lanes reflect your full recent inbox
+
+This usually takes under a minute depending on AI provider latency.
+
+## Step 5 — Explore the inbox
+
+Once on `/inbox`:
+
+| Area | What you see |
+|------|--------------|
+| **Left** | Lane tabs — Reply, Schedule, FYI, Done |
+| **Center** | Thread list for the active lane |
+| **Right** | Selected thread + week-strip calendar |
+| **Bottom-right** | Agent chat panel (toggle in header) |
+
+Use **`J`** and **`K`** to move between threads. Press **`?`** for the full shortcut cheat sheet.
+
+## Step 6 — Try the hero workflow
+
+1. Open a thread in the **Schedule** lane (or any email mentioning meeting times)
+2. Press **`M`**
+3. Review extracted attendees and proposed times
+4. Click an available slot
+5. Confirm — calendar invite sends and a confirmation draft appears in the composer
+
+## AI provider switcher
+
+In the inbox header, you can switch between **OpenAI** and **Gemini**. This affects classification, drafts, search embeddings, and the agent.
+
+Switching embedding provider starts a **re-embed job** (banner shows progress). Semantic search works best after re-embed completes.
+
+## Troubleshooting first run
+
+| Issue | What to do |
+|-------|------------|
+| Redirect loop on sign-in | Check OAuth redirect URIs match your app URL |
+| "Google not connected" | Finish both Gmail and Calendar on onboarding |
+| Empty lanes after connect | Wait for backfill; refresh after ~30s |
+| AI features unavailable | App needs at least one AI API key configured server-side |
+
+For self-hosters, see [Local development](/docs/developer-guide/local-development).

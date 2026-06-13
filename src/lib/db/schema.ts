@@ -23,7 +23,7 @@ export const scheduledSendStatusEnum = pgEnum("scheduled_send_status", [
   "failed",
 ]);
 
-import type { SchedulingIntentStored } from "@/lib/schemas/domain";
+import type { SchedulingIntentStored, SuggestedAction, DailyBrief } from "@/lib/schemas/domain";
 import { EMBEDDING_DIMENSIONS } from "@/lib/ai/providers";
 
 export type SchedulingIntent = SchedulingIntentStored;
@@ -34,6 +34,8 @@ export const users = pgTable("users", {
   name: text("name"),
   corsairTenantId: text("corsair_tenant_id"),
   backfillCompletedAt: timestamp("backfill_completed_at", { withTimezone: true }),
+  gmailWatchExpiresAt: timestamp("gmail_watch_expires_at", { withTimezone: true }),
+  calendarWatchExpiresAt: timestamp("calendar_watch_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -134,10 +136,85 @@ export const webhookLogs = pgTable("webhook_logs", {
   error: text("error"),
 });
 
+export const agentConversations = pgTable(
+  "agent_conversations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("New chat"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("agent_conversations_user_updated_idx").on(table.userId, table.updatedAt)]
+);
+
+export const agentMessages = pgTable(
+  "agent_messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => agentConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    parts: json("parts").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("agent_messages_conversation_idx").on(table.conversationId, table.createdAt)]
+);
+
+export const threadSummaries = pgTable(
+  "thread_summaries",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    bullets: json("bullets").$type<string[]>().notNull(),
+    actions: json("actions").$type<SuggestedAction[]>().notNull(),
+    messageCount: integer("message_count").notNull(),
+    provider: text("provider").$type<"gemini" | "openai" | null>(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("thread_summaries_user_thread_idx").on(table.userId, table.threadId)]
+);
+
+export const dailyBriefs = pgTable(
+  "daily_briefs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    brief: json("brief").$type<DailyBrief>().notNull(),
+    sourceHash: text("source_hash").notNull(),
+    provider: text("provider").$type<"gemini" | "openai" | null>(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("daily_briefs_user_idx").on(table.userId)]
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   classifications: many(classifications),
   snoozes: many(snoozes),
   drafts: many(drafts),
   scheduledSends: many(scheduledSends),
   threadMeetings: many(threadMeetings),
+  agentConversations: many(agentConversations),
+  threadSummaries: many(threadSummaries),
+  dailyBriefs: many(dailyBriefs),
+}));
+
+export const agentConversationsRelations = relations(agentConversations, ({ one, many }) => ({
+  user: one(users, { fields: [agentConversations.userId], references: [users.id] }),
+  messages: many(agentMessages),
+}));
+
+export const agentMessagesRelations = relations(agentMessages, ({ one }) => ({
+  conversation: one(agentConversations, {
+    fields: [agentMessages.conversationId],
+    references: [agentConversations.id],
+  }),
 }));

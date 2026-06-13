@@ -48,6 +48,9 @@ const envSchema = z.object({
 
   OPENAI_API_KEY: optionalNonEmpty(),
 
+  /** Default AI provider when user has no saved preference (openai | gemini) */
+  DEFAULT_AI_PROVIDER: z.enum(["openai", "gemini"]).optional(),
+
   /** Gmail Pub/Sub topic for push notifications (projects/…/topics/…) */
   GMAIL_PUBSUB_TOPIC: optionalNonEmpty(),
 

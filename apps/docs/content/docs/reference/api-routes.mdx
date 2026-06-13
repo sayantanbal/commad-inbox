@@ -1,0 +1,460 @@
+---
+title: API routes
+description: Complete HTTP API reference with auth, bodies, and responses
+---
+
+Base path: `/api`. JSON routes use `Content-Type: application/json` unless noted.
+
+## Shared conventions
+
+### Authentication
+
+| Pattern | Routes | Mechanism |
+|---------|--------|-----------|
+| Session cookie | Most user routes | Better Auth `auth.api.getSession({ headers })` |
+| Session + Google | Inbox, agent, advanced search | `requireSessionApi()` + `isTenantFullyConnected` |
+| Bearer token | Cron | `Authorization: Bearer $CRON_SECRET` |
+| Corsair signature | Webhooks | `x-corsair-signature` via `processWebhook()` |
+
+### Common errors
+
+**401 Unauthorized**
+```json
+{ "error": "Unauthorized" }
+```
+
+**403 Google not connected**
+```json
+{ "error": "Google not connected" }
+```
+
+**400 Invalid JSON**
+```json
+{ "error": "Invalid JSON body" }
+```
+
+**400 Validation (Zod)**
+```json
+{
+  "error": "Invalid request",
+  "fieldErrors": { "threadId": ["threadId is required"] },
+  "formErrors": []
+}
+```
+
+**503 Phase 2 AI not configured**
+```json
+{ "error": "At least one AI provider key is required (...)" }
+```
+
+### Shared types
+
+**Classification**
+```typescript
+{
+  threadId: string;
+  priority: "high" | "medium" | "low";
+  lane: "reply" | "schedule" | "fyi" | "done";
+  subject: string;
+  sender: string;
+  snippet: string;
+  schedulingIntent: {
+    proposedTimes: string[];
+    attendees: string[];
+    duration: number;
+    confidence: number;
+  } | null;
+  classifiedAt: string;
+}
+```
+
+**SearchHit**
+```typescript
+{
+  threadId: string;
+  subject: string;
+  sender: string;
+  snippet: string;
+  lane: string;
+  priority: string;
+  score: number;
+}
+```
+
+---
+
+## Auth
+
+### GET|POST /api/auth/[...all]
+
+Better Auth handler — sign-in, sign-out, session, OAuth callbacks.
+
+| | |
+|---|---|
+| Auth | Varies by sub-route |
+| Response | JSON or redirect per Better Auth |
+
+Example callback: `GET /api/auth/callback/google`
+
+---
+
+### GET /api/auth/callback/corsair
+
+Corsair OAuth callback for Gmail + Calendar connect.
+
+| | |
+|---|---|
+| Auth | Session cookie required |
+
+**Query:** `code`, `state` (must match `oauth_state` cookie)
+
+**Redirects (not JSON):**
+
+| Condition | Location |
+|-----------|----------|
+| No session | `/sign-in` |
+| Missing params | `/onboarding/connect?error=missing_oauth_params` |
+| State mismatch | `/onboarding/connect?error=invalid_oauth_state` |
+| Fully connected | `/inbox` |
+| Partial | `/onboarding/connect` |
+
+---
+
+## Connect
+
+### GET /api/connect/google
+
+Start Gmail OAuth via Corsair.
+
+| | |
+|---|---|
+| Auth | Session cookie |
+
+**Response:** `302` redirect to Google OAuth (sets `oauth_state` cookie) or `/sign-in` / `?error=kek_mismatch`
+
+---
+
+## Inbox
+
+All inbox routes use `requireSessionApi()`.
+
+### POST|DELETE /api/inbox/snooze
+
+#### POST — Snooze thread
+
+```json
+// Request
+{ "threadId": "string", "until": "2026-06-13T12:00:00.000Z" }
+
+// Response 200
+{ "success": true }
+```
+
+#### DELETE — Cancel snooze
+
+```json
+// Request
+{ "threadId": "string" }
+
+// Response 200
+{ "success": true }
+```
+
+---
+
+### POST /api/inbox/archive
+
+```json
+// Request
+{ "threadId": "string" }
+
+// Response 200
+{ "success": true, "classification": Classification | null }
+```
+
+Archives in Gmail and sets lane to `done`.
+
+**500:** `{ "error": "Archive failed" }`
+
+---
+
+### POST /api/inbox/restore
+
+```json
+// Request
+{ "threadId": "string", "lane": "reply" | "schedule" | "fyi" | "done" }
+
+// Response 200
+{ "success": true, "classification": Classification | null }
+```
+
+---
+
+### POST /api/inbox/draft
+
+Requires `assertPhase2Env()`.
+
+```json
+// Request
+{
+  "threadId": "string",
+  "tone": "professional" | "friendly" | "brief",
+  "provider": "openai" | "gemini"
+}
+
+// Response 200
+{ "draftHtml": "string", "source": "ai" | "template" }
+```
+
+**404:** `{ "error": "Thread not found" }`
+
+---
+
+### POST|PUT|DELETE /api/inbox/send
+
+Queued send with 5s undo window (`UNDO_WINDOW_MS = 5000`).
+
+#### POST — Queue send
+
+```json
+// Request
+{
+  "to": ["user@example.com"],
+  "subject": "string",
+  "body": "string",
+  "threadId": "string",
+  "sendAt": "2026-06-13T12:00:00.000Z"
+}
+
+// Response 200
+{
+  "scheduledSendId": "string",
+  "sendAt": "2026-06-13T12:00:05.000Z",
+  "undoWindowMs": 5000
+}
+```
+
+#### PUT — Dispatch immediately
+
+```json
+// Request
+{ "scheduledSendId": "string" }
+
+// Response 200
+{ "success": true, "messageId": "string" }
+
+// Response 409
+{ "error": "Send not ready or already handled" }
+```
+
+#### DELETE — Cancel queued send
+
+```json
+// Request
+{ "scheduledSendId": "string" }
+
+// Response 200
+{ "success": true | false }
+```
+
+---
+
+### POST|PATCH|DELETE /api/inbox/meeting
+
+POST/PATCH require `assertPhase2Env()`.
+
+#### POST — Create meeting
+
+```json
+// Request
+{
+  "threadId": "string",
+  "slotStart": "2026-06-13T14:00:00.000Z",
+  "durationMinutes": 30
+}
+
+// Response 200
+{
+  "success": true,
+  "eventId": "string",
+  "hangoutLink": "string",
+  "htmlLink": "string",
+  "draftHtml": "string",
+  "meeting": {
+    "threadId": "string",
+    "eventId": "string",
+    "start": "ISO",
+    "durationMinutes": 30
+  },
+  "classification": Classification | null
+}
+```
+
+| Status | Error |
+|--------|-------|
+| 400 | No attendees found |
+| 404 | Thread not found |
+| 409 | Thread already has a meeting |
+| 503 | AI not configured |
+
+#### PATCH — Reschedule
+
+Same request body as POST. Returns meeting + draft without classification.
+
+#### DELETE — Cancel meeting
+
+```json
+// Request
+{ "threadId": "string" }
+
+// Response 200
+{ "success": true, "eventId": "string" }
+```
+
+---
+
+### POST /api/inbox/reembed
+
+Requires `assertPhase2Env()`.
+
+```json
+// Request
+{ "provider": "openai" | "gemini" }
+
+// Response 200
+{ "status": "running", "provider": "openai" }
+{ "status": "nothing-to-do", "provider": "openai", "total": 0 }
+{ "status": "started", "provider": "openai", "total": 42 }
+```
+
+---
+
+## Search
+
+### POST /api/search
+
+Session only (no Google-connect check). Requires Phase 2 AI.
+
+```json
+// Request
+{ "query": "string", "limit": 20, "provider": "openai" }
+
+// Response 200
+{ "results": SearchHit[] }
+```
+
+Returns `[]` if backfill incomplete.
+
+---
+
+### POST /api/search/advanced
+
+Session + Google fully connected.
+
+```json
+// Request
+{
+  "query": "string",
+  "sender": "string",
+  "after": "ISO datetime",
+  "before": "ISO datetime",
+  "hasAttachment": true,
+  "lane": "reply" | "schedule" | "fyi" | "done",
+  "limit": 30
+}
+
+// Response 200
+{ "results": SearchHit[] }
+```
+
+**500:** `{ "error": "Advanced search failed" }`
+
+---
+
+## Agent
+
+### POST /api/agent/chat
+
+`requireSessionApi()` + `assertPhase2Env()`. Max duration 60s.
+
+```json
+// Request
+{
+  "messages": [/* AI SDK UIMessage[] */],
+  "provider": "openai"
+}
+```
+
+**200:** AI SDK UI Message Stream (SSE). Tool calls include approval pauses for `run_script`.
+
+**500:** `{ "error": "Agent request failed" }`
+
+---
+
+## Cron
+
+### POST /api/cron/process-due
+
+```http
+Authorization: Bearer $CRON_SECRET
+```
+
+No body.
+
+```json
+// Response 200
+{
+  "success": true,
+  "sentCount": 0,
+  "expiredSnoozes": 0
+}
+```
+
+Processes due scheduled sends and expired snoozes for all users.
+
+---
+
+## Webhooks
+
+### POST /api/webhooks
+
+Runtime: `nodejs`. Corsair signature verification.
+
+**Query:** `tenantId` (required — user ID)
+
+**Headers:** `x-corsair-signature`
+
+**Body:** Raw JSON (Corsair webhook payload)
+
+```json
+// Response 200
+{ "success": true, "plugin": "gmail" }
+```
+
+**400:** Plain text `Missing tenantId` or `Invalid JSON`
+
+On `gmail.messageChanged`, async classification runs. Verified webhooks return 200 even if async handler fails (logged).
+
+**URL pattern:** `{APP_URL}/api/webhooks?tenantId={userId}`
+
+---
+
+## Quick reference table
+
+| Route | Methods | Auth | Phase 2 AI |
+|-------|---------|------|------------|
+| `/api/auth/[...all]` | GET, POST | Better Auth | — |
+| `/api/auth/callback/corsair` | GET | Session | — |
+| `/api/connect/google` | GET | Session | — |
+| `/api/inbox/snooze` | POST, DELETE | Session + Google | — |
+| `/api/inbox/archive` | POST | Session + Google | — |
+| `/api/inbox/restore` | POST | Session + Google | — |
+| `/api/inbox/draft` | POST | Session + Google | yes |
+| `/api/inbox/send` | POST, PUT, DELETE | Session + Google | — |
+| `/api/inbox/meeting` | POST, PATCH, DELETE | Session + Google | POST/PATCH |
+| `/api/inbox/reembed` | POST | Session + Google | yes |
+| `/api/search` | POST | Session | yes |
+| `/api/search/advanced` | POST | Session + Google | — |
+| `/api/agent/chat` | POST | Session + Google | yes |
+| `/api/cron/process-due` | POST | Bearer | — |
+| `/api/webhooks` | POST | Corsair sig | — |

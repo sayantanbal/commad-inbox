@@ -1,0 +1,112 @@
+---
+title: Corsair MCP tools
+description: Agent tool definitions, approval flow, and execution model
+---
+
+Source: `src/lib/agent/mcp-tools.ts`, `@corsair-dev/mcp`.
+
+The agent embeds Corsair MCP tools **in-process** — no standalone MCP HTTP server.
+
+## buildAgentMcpTools
+
+```typescript
+function buildAgentMcpTools(
+  tenant: ReturnType<CorsairInstance["withTenant"]>,
+  userId: string
+): ToolSet
+```
+
+Called per request in `POST /api/agent/chat` with the authenticated user's Corsair tenant.
+
+## Tool definitions
+
+Built via `buildCorsairToolDefs()` from `@corsair-dev/mcp`:
+
+```typescript
+buildCorsairToolDefs({
+  corsair: tenant,
+  tenantId: userId,
+  setup: false,
+});
+```
+
+### list_operations
+
+Discover available Gmail and Google Calendar operations exposed by Corsair.
+
+- **Approval:** Not required
+- **Purpose:** Agent planning — find the right operation before calling `run_script`
+
+### get_schema
+
+Inspect input schema for a specific operation.
+
+- **Approval:** Not required
+- **Purpose:** Agent validates parameters before execution
+
+### run_script
+
+Execute a Corsair script against Gmail or Calendar.
+
+- **Approval:** **Required** (`needsApproval: true`)
+- **Purpose:** Write operations — send mail, create events, modify labels, etc.
+
+## Approval configuration
+
+```typescript
+const APPROVAL_TOOLS = new Set(["run_script"]);
+```
+
+In tool registration:
+
+```typescript
+needsApproval: APPROVAL_TOOLS.has(def.name),
+```
+
+The UI (`agent-tool-approval.tsx`) renders approval cards when the stream pauses on `run_script`.
+
+## Execution flow
+
+1. User sends message → `POST /api/agent/chat`
+2. `streamText()` with MCP tools attached
+3. Agent may call `list_operations` / `get_schema` freely
+4. On `run_script` → stream pauses, approval UI shown
+5. User approves → `execute()` runs `def.handler(input)`
+6. Result converted to text via `toolResultToOutput()`
+7. Stream continues with tool result
+
+## Error handling
+
+If Corsair returns `isError: true`, `toolResultToOutput` throws with the text content — surfaced in the agent stream via `agentStreamErrorHandler`.
+
+## System prompt
+
+Agent behavior guided by `src/lib/agent/system-prompt.ts` — instructs tool use, approval respect, and scheduling-focused workflows.
+
+## Security model
+
+| Property | Value |
+|----------|-------|
+| Tenant isolation | Tools scoped to `userId` tenant only |
+| Credentials | User's OAuth tokens via Corsair |
+| Approval gate | Write scripts require explicit user consent |
+| Timeout | 60s max duration on chat route |
+
+## Example agent prompt
+
+```
+Send a calendar invite to friend@corsair.dev at 9 AM next Thursday
+and draft a confirmation reply.
+```
+
+Expected tool sequence:
+
+1. `list_operations` — find calendar + gmail ops
+2. `get_schema` — inspect create event + send draft schemas
+3. `run_script` — create event (approval)
+4. `run_script` — queue/send draft (approval)
+
+## Related
+
+- [Agent chat user guide](/docs/user-guide/agent-chat)
+- [API routes — /api/agent/chat](/docs/reference/api-routes)

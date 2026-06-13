@@ -1,4 +1,5 @@
 import { classifyThreadForUser } from "@/lib/classifier/persist";
+import { invalidateDailyBriefCache } from "@/lib/ai/daily-brief-cache";
 import { corsair } from "@/lib/corsair";
 
 type GmailWebhookEvent = {
@@ -20,4 +21,5 @@ export async function handleGmailMessageChanged(
 
   const tenant = corsair.withTenant(tenantId);
   await classifyThreadForUser(tenantId, tenant, threadId);
+  await invalidateDailyBriefCache(tenantId);
 }

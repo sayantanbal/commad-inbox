@@ -1,9 +1,9 @@
 "use client";
 
-import { Calendar, Command, Inbox, MessageSquare } from "lucide-react";
+import { Calendar, Command, Inbox, MessageSquare, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "inbox" | "calendar" | "agent";
+export type MobileTab = "brief" | "inbox" | "calendar" | "agent";
 
 interface MobileTabBarProps {
   active: MobileTab;
@@ -12,6 +12,7 @@ interface MobileTabBarProps {
 
 const tabs: Array<{ id: MobileTab; label: string; icon: React.ComponentType<{ className?: string }> }> =
   [
+    { id: "brief", label: "Brief", icon: Sun },
     { id: "inbox", label: "Inbox", icon: Inbox },
     { id: "calendar", label: "Calendar", icon: Calendar },
     { id: "agent", label: "Agent", icon: MessageSquare },

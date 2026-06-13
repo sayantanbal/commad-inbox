@@ -1,0 +1,75 @@
+---
+title: Triage lanes
+description: How AI assigns Reply, Schedule, FYI, and Done lanes
+---
+
+## The four lanes
+
+Command Inbox organizes mail into four lanes based on a single question: *what kind of work does this thread need?*
+
+| Lane | Icon color cue | When AI assigns it |
+|------|----------------|-------------------|
+| **Reply** | Action needed | Questions, requests, decisions, follow-ups requiring a written response |
+| **Schedule** | Calendar-centric | Meeting proposals, invite requests, reschedules, availability asks |
+| **FYI** | Low urgency | Newsletters, notifications, receipts, CC-only informational mail |
+| **Done** | Archived | Threads you archived with **`E`** — removed from active lanes |
+
+Lanes appear as tabs at the top of the thread list. Only one lane is active at a time.
+
+## Priority within lanes
+
+Each thread also has a **priority**: high, medium, or low. Higher-priority threads sort toward the top within a lane. Priority reflects urgency and sender importance inferred by the classifier.
+
+## Scheduling intent
+
+Threads in the **Schedule** lane often include structured **scheduling intent**:
+
+- Proposed date/times mentioned in the email
+- Attendee email addresses
+- Suggested duration
+- Confidence score
+
+This data powers the **`M`** meeting workflow — you do not need to re-read the thread to find times.
+
+## How classification updates
+
+### Initial backfill
+
+When you first connect Google, the app classifies the latest 50 INBOX threads. Progress appears in the activity banner.
+
+### Realtime webhooks
+
+When new mail arrives (or existing threads change), Gmail push notifies the app:
+
+1. Corsair syncs the thread to its cache
+2. AI re-classifies the thread
+3. Embedding is updated for semantic search
+4. Pusher pushes an update to your browser (or polling refreshes within 5s)
+
+You may see a thread **move between lanes** without refreshing the page.
+
+## Manual lane changes
+
+| Action | Effect |
+|--------|--------|
+| **`E`** (archive) | Moves thread to **Done** lane; archives in Gmail |
+| Restore from Done | Command palette or API — pick target lane |
+
+Archiving is the primary way users move mail to Done. The AI does not auto-archive.
+
+## Lane filters in search
+
+**Advanced search** (`Mod+Shift+F`) accepts an optional **lane** filter so you can query Gmail history scoped to, for example, all Schedule-lane threads from a specific sender.
+
+## Tips for evaluators
+
+1. Send yourself a test email with explicit scheduling language — watch it land in **Schedule** within ~30 seconds
+2. Send a newsletter-style email — expect **FYI**
+3. Send a direct question — expect **Reply**
+4. Archive with **`E`** — thread moves to **Done**
+
+## Related
+
+- [Schedule a meeting](/docs/user-guide/schedule-meeting) — uses Schedule lane + scheduling intent
+- [Semantic search](/docs/user-guide/semantic-search) — searches across classified threads
+- [Webhooks & realtime](/docs/developer-guide/webhooks-realtime) — how classification runs server-side

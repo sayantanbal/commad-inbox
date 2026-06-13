@@ -36,6 +36,27 @@
       "when": 1781196000000,
       "tag": "0004_embedding_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781200000000,
+      "tag": "0005_agent_chats_summaries",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781204000000,
+      "tag": "0006_daily_briefs",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781208000000,
+      "tag": "0007_watch_expiration",
+      "breakpoints": true
     }
   ]
 }

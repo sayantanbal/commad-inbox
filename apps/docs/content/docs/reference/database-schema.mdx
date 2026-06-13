@@ -1,0 +1,158 @@
+---
+title: Database schema
+description: Complete table, column, enum, and index reference
+---
+
+Schema source: `src/lib/db/schema.ts` and `src/lib/db/auth-schema.ts`.
+
+Embedding dimensions: **768** (`EMBEDDING_DIMENSIONS` in `providers.ts`).
+
+## Enums
+
+### priority
+
+`high` | `medium` | `low`
+
+### triage_lane
+
+`reply` | `schedule` | `fyi` | `done`
+
+### draft_tone
+
+`professional` | `friendly` | `brief`
+
+### scheduled_send_status
+
+`pending` | `sent` | `cancelled` | `failed`
+
+## users
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK — Better Auth user ID |
+| `email` | `text` | NOT NULL, UNIQUE |
+| `name` | `text` | nullable |
+| `corsair_tenant_id` | `text` | nullable — set after Google connect |
+| `backfill_completed_at` | `timestamptz` | nullable — initial classification done |
+| `created_at` | `timestamptz` | NOT NULL, default now |
+| `updated_at` | `timestamptz` | NOT NULL, default now |
+
+## classifications
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK |
+| `user_id` | `text` | FK → users.id, ON DELETE CASCADE |
+| `thread_id` | `text` | NOT NULL — Gmail thread ID |
+| `priority` | `priority` enum | NOT NULL |
+| `lane` | `triage_lane` enum | NOT NULL |
+| `subject` | `text` | NOT NULL — denormalized |
+| `sender` | `text` | NOT NULL — denormalized |
+| `snippet` | `text` | NOT NULL — denormalized |
+| `scheduling_intent` | `jsonb` | nullable — see shape below |
+| `classified_at` | `timestamptz` | NOT NULL, default now |
+| `embedding` | `vector(768)` | nullable |
+| `embedding_provider` | `text` | nullable — `openai` \| `gemini` |
+
+**Indexes:**
+
+- `classifications_user_idx` on (`user_id`)
+- `classifications_user_thread_idx` on (`user_id`, `thread_id`)
+- `classifications_user_provider_idx` on (`user_id`, `embedding_provider`)
+
+### scheduling_intent JSON shape
+
+```json
+{
+  "proposedTimes": ["2026-06-20T14:00:00.000Z"],
+  "attendees": ["guest@example.com"],
+  "duration": 30,
+  "confidence": 0.85
+}
+```
+
+## snoozes
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK |
+| `user_id` | `text` | FK → users.id, CASCADE |
+| `thread_id` | `text` | NOT NULL |
+| `snoozed_until` | `timestamptz` | NOT NULL |
+| `created_at` | `timestamptz` | NOT NULL, default now |
+
+**Index:** `snoozes_user_time_idx` on (`user_id`, `snoozed_until`)
+
+## drafts
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK |
+| `user_id` | `text` | FK → users.id, CASCADE |
+| `thread_id` | `text` | nullable |
+| `content` | `text` | NOT NULL — HTML |
+| `tone` | `draft_tone` enum | nullable |
+| `approved` | `boolean` | NOT NULL, default false |
+| `created_at` | `timestamptz` | NOT NULL, default now |
+
+## scheduled_sends
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK |
+| `user_id` | `text` | FK → users.id, CASCADE |
+| `thread_id` | `text` | nullable |
+| `to` | `jsonb` | NOT NULL — string array |
+| `subject` | `text` | NOT NULL |
+| `body` | `text` | NOT NULL |
+| `send_at` | `timestamptz` | NOT NULL |
+| `status` | `scheduled_send_status` | NOT NULL, default `pending` |
+| `sent_at` | `timestamptz` | nullable |
+| `created_at` | `timestamptz` | NOT NULL, default now |
+
+**Index:** `scheduled_sends_time_idx` on (`status`, `send_at`)
+
+## thread_meetings
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK |
+| `user_id` | `text` | FK → users.id, CASCADE |
+| `thread_id` | `text` | NOT NULL |
+| `event_id` | `text` | NOT NULL — Google Calendar event ID |
+| `slot_start` | `timestamptz` | NOT NULL |
+| `duration_minutes` | `integer` | NOT NULL |
+| `created_at` | `timestamptz` | NOT NULL, default now |
+
+**Index:** `thread_meetings_user_thread_idx` on (`user_id`, `thread_id`)
+
+## webhook_logs
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `text` | PK |
+| `user_id` | `text` | FK → users.id, SET NULL |
+| `payload` | `jsonb` | NOT NULL |
+| `signature` | `text` | nullable |
+| `verified` | `boolean` | NOT NULL |
+| `processed_at` | `timestamptz` | NOT NULL, default now |
+| `error` | `text` | nullable |
+
+## Better Auth tables
+
+Managed by `drizzle/0001_better_auth.sql` — standard Better Auth schema (sessions, accounts, verifications). See Better Auth documentation for column details.
+
+## Corsair cache tables
+
+Created by `bun run corsair:setup` — not in Drizzle schema. Stores synced Gmail/Calendar data and encrypted OAuth tokens. Access via Corsair SDK only.
+
+## Relations
+
+```
+users 1──* classifications
+users 1──* snoozes
+users 1──* drafts
+users 1──* scheduled_sends
+users 1──* thread_meetings
+users 1──* webhook_logs
+```

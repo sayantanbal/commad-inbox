@@ -1,0 +1,83 @@
+---
+title: Scripts and CLI
+description: npm/bun scripts and utility commands
+---
+
+Defined in root `package.json`.
+
+## Application scripts
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `dev` | `next dev` | Start development server (port 3000) |
+| `build` | `next build` | Production build |
+| `start` | `next start` | Start production server |
+| `lint` | `next lint` | ESLint |
+
+## Database scripts
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `db:migrate` | `bun scripts/migrate.ts` | Apply Drizzle SQL migrations |
+| `db:studio` | `drizzle-kit studio` | Open Drizzle Studio GUI |
+
+## Corsair scripts
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `corsair:setup` | `bun scripts/corsair-setup.ts` | Initialize Corsair schema + integrations |
+| `corsair:reset` | `bun scripts/corsair-reset.ts` | Wipe Corsair data (destructive — requires reconnect) |
+| `smoke:corsair` | `bun scripts/smoke-corsair.ts` | Sanity check Corsair API connectivity |
+| `gmail:watch` | `bun scripts/gmail-watch.ts` | Register Gmail Pub/Sub watch |
+
+## Composite scripts
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `phase0` | `db:migrate && corsair:setup && smoke:corsair` | Full Phase 0 bootstrap |
+
+## Documentation scripts (root)
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `docs:dev` | `bun run --filter command-inbox-docs dev` | Fumadocs dev server (port 3001) |
+| `docs:build` | `bun run --filter command-inbox-docs build` | Build docs site |
+
+## Script file locations
+
+| Path | Purpose |
+|------|---------|
+| `scripts/migrate.ts` | Migration runner |
+| `scripts/corsair-setup.ts` | Corsair initialization |
+| `scripts/corsair-reset.ts` | Corsair reset |
+| `scripts/smoke-corsair.ts` | API smoke test |
+| `scripts/gmail-watch.ts` | Gmail push watch registration |
+
+## Typical workflows
+
+**Fresh local setup:**
+
+```bash
+bun install
+cp .env.example .env.local
+# fill env
+bun run phase0
+bun dev
+```
+
+**Production migration:**
+
+```bash
+DATABASE_URL="postgresql://..." bun run db:migrate
+DATABASE_URL="postgresql://..." bun run corsair:setup
+```
+
+**Docs development:**
+
+```bash
+bun run docs:dev
+```
+
+## Package manager
+
+Project uses **Bun** for install and script execution. Vercel builds use `bun install` and `bun run build` per `vercel.json`.

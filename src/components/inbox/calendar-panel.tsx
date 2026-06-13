@@ -11,7 +11,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,6 +28,7 @@ interface CalendarPanelProps {
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   onDefrag?: () => void;
+  onMonthChange?: (month: Date) => void;
 }
 
 export function CalendarPanel({
@@ -35,12 +36,17 @@ export function CalendarPanel({
   searchQuery = "",
   onSearchChange,
   onDefrag,
+  onMonthChange,
 }: CalendarPanelProps) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
   const today = new Date();
+
+  useEffect(() => {
+    onMonthChange?.(currentMonth);
+  }, [currentMonth, onMonthChange]);
 
   const days = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
   const weekDays = useMemo(

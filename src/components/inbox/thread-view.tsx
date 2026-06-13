@@ -3,12 +3,15 @@
 import { EmailHtmlFrame } from "@/components/inbox/email-html-frame";
 import { InlineAvailabilityPicker } from "@/components/inbox/inline-availability-picker";
 import { MeetingBanner } from "@/components/inbox/meeting-banner";
+import { ThreadSummaryBox } from "@/components/inbox/thread-summary-box";
 import { Archive, Calendar, Clock, Reply } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { RsvpSummary } from "@/lib/inbox/rsvp";
+import type { AiProvider } from "@/lib/ai/providers";
+import type { SuggestedAction } from "@/lib/schemas/domain";
 import { formatRelativeTime } from "@/lib/utils";
 import type { CalendarEvent, SchedulingIntent, Thread, ThreadMeeting } from "@/lib/types";
 
@@ -22,6 +25,9 @@ interface ThreadViewProps {
   availabilityMode: "create" | "reschedule";
   schedulingIntent: SchedulingIntent | null;
   freeSlots: Date[];
+  calendarEvents: CalendarEvent[];
+  meetingDuration: number;
+  excludeEventId?: string;
   meetingAttendees: string[];
   onReply: () => void;
   onArchive: () => void;
@@ -31,6 +37,8 @@ interface ThreadViewProps {
   onSelectSlot: (slot: Date) => void;
   onRescheduleMeeting: () => void;
   onCancelMeeting: () => void;
+  aiProvider: AiProvider;
+  onSuggestedAction: (action: SuggestedAction) => void;
 }
 
 function ShortcutButton({
@@ -70,6 +78,9 @@ export function ThreadView({
   availabilityMode,
   schedulingIntent,
   freeSlots,
+  calendarEvents,
+  meetingDuration,
+  excludeEventId,
   meetingAttendees,
   onReply,
   onArchive,
@@ -79,6 +90,8 @@ export function ThreadView({
   onSelectSlot,
   onRescheduleMeeting,
   onCancelMeeting,
+  aiProvider,
+  onSuggestedAction,
 }: ThreadViewProps) {
   if (!thread) {
     return (
@@ -122,6 +135,9 @@ export function ThreadView({
         mode={availabilityMode}
         schedulingIntent={schedulingIntent}
         freeSlots={freeSlots}
+        calendarEvents={calendarEvents}
+        durationMinutes={meetingDuration}
+        excludeEventId={excludeEventId}
         attendees={meetingAttendees}
         onClose={onCloseAvailability}
         onSelectSlot={onSelectSlot}
@@ -133,6 +149,12 @@ export function ThreadView({
           {thread.participants.map((p) => p.name).join(", ")}
         </p>
       </div>
+
+      <ThreadSummaryBox
+        thread={thread}
+        provider={aiProvider}
+        onAction={onSuggestedAction}
+      />
 
       <ScrollArea className="flex-1">
         <div className="space-y-6 p-6">

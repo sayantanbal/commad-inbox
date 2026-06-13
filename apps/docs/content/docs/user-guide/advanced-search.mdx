@@ -1,0 +1,69 @@
+---
+title: Advanced search
+description: Query your full Gmail mailbox with structured filters
+---
+
+Press **`Mod+Shift+F`** to open **advanced search**.
+
+This searches your **entire Gmail mailbox** through Corsair's Gmail API — not just classified threads. Use it when you need precise filters or mail outside the initial backfill window.
+
+## Filter fields
+
+| Field | Description |
+|-------|-------------|
+| **Query** | Free-text Gmail search query (max 500 chars) |
+| **Sender** | Filter by from address or name |
+| **After** | Messages after this date/time |
+| **Before** | Messages before this date/time |
+| **Has attachment** | Only threads with attachments |
+| **Lane** | Restrict to threads classified in a specific lane (reply / schedule / fyi / done) |
+
+Lane filter joins Gmail results with your app's classification data — threads without classification still appear but lane filter only matches classified ones.
+
+## Example searches
+
+**All mail from a VC firm last quarter:**
+
+- Sender: `partner@fund.com`
+- After: `2026-01-01`
+- Before: `2026-04-01`
+
+**Schedule-lane threads about demos:**
+
+- Query: `demo OR walkthrough`
+- Lane: Schedule
+
+**PDFs from a client:**
+
+- Sender: `client@example.com`
+- Has attachment: on
+- Query: `filename:pdf`
+
+## Results
+
+Each hit includes:
+
+- Thread ID, subject, sender, snippet
+- Lane and priority (if classified)
+- Score (always `0` for advanced search — ranking is Gmail order)
+
+Click a result to open the thread in the inbox.
+
+## Requirements
+
+- Gmail must be **fully connected** (session + OAuth)
+- Does **not** require AI keys or completed backfill
+- Requires live Gmail API access (subject to Google quota)
+
+## Errors
+
+If search fails, you may see a toast or empty results. Common causes:
+
+- Google OAuth token expired — reconnect on onboarding
+- Gmail API quota — retry later
+- Invalid date range — check After/Before order
+
+## Related
+
+- [Semantic search](/docs/user-guide/semantic-search) — meaning-based search over classified mail
+- [API routes — `/api/search/advanced`](/docs/reference/api-routes)

@@ -12,6 +12,46 @@ A keyboard-first Gmail + Google Calendar command center built on [Corsair](https
 - **Agent chat** — Corsair MCP tools with approval UI for `run_script` actions
 - **Command palette & shortcuts** — Superhuman-style keys; PWA + mobile tabs
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph google [Google]
+        gmail[Gmail API]
+        gcal[Calendar API]
+    end
+    subgraph corsair [Corsair SDK]
+        plugins[Gmail + GCal plugins]
+        webhooks[Webhook handler]
+        mcp[MCP tools]
+    end
+    subgraph app [Next.js on Vercel]
+        ui[Inbox UI]
+        api[Route handlers]
+        agent[Agent chat]
+        classifier[AI classifier]
+    end
+    subgraph db [Neon Postgres]
+        cache[Corsair cache]
+        appTables[lanes / snoozes / meetings]
+        vectors[pgvector embeddings]
+    end
+
+    gmail <--> plugins
+    gcal <--> plugins
+    plugins <--> cache
+    webhooks --> classifier
+    classifier --> appTables
+    classifier --> vectors
+    ui <--> api
+    api <--> plugins
+    agent <--> mcp
+    mcp <--> plugins
+    ui --> vectors
+```
+
+**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair cache → classify + embed → Pusher → UI. Reads use Corsair cache in Postgres, not live Google API calls.
+
 ## Stack
 
 | Layer | Tech |
@@ -73,6 +113,21 @@ ngrok http 3000
 
 Set `APP_URL` to the ngrok HTTPS URL. Configure Gmail Pub/Sub per `docs/phase2-webhooks.md`.
 
+## Documentation
+
+Full documentation site: **[docs.command-inbox.sayantanbal.in](https://docs.command-inbox.sayantanbal.in)**
+
+Run locally: `bun run docs:dev` → [http://localhost:3001](http://localhost:3001)
+
+| Doc | Purpose |
+|-----|---------|
+| [Overview](https://docs.command-inbox.sayantanbal.in/docs/overview/introduction) | Product thesis, architecture, stack |
+| [User Guide](https://docs.command-inbox.sayantanbal.in/docs/user-guide/getting-started) | Keyboard workflows, lanes, agent |
+| [Developer Guide](https://docs.command-inbox.sayantanbal.in/docs/developer-guide/local-development) | Local setup, webhooks, deploy |
+| [Reference](https://docs.command-inbox.sayantanbal.in/docs/reference/environment) | Env vars, API routes, schema |
+| [docs/deploy.md](docs/deploy.md) | Legacy deploy notes (see docs site) |
+| [docs/phase2-webhooks.md](docs/phase2-webhooks.md) | Legacy webhook notes (see docs site) |
+
 ## Keyboard shortcuts
 
 | Key | Action |
@@ -93,19 +148,45 @@ Set `APP_URL` to the ngrok HTTPS URL. Configure Gmail Pub/Sub per `docs/phase2-w
 - MCP adapter (`list_operations`, `get_schema`, `run_script`) for agent chat
 - Gmail `threads.list` for advanced search
 
+## Bonus rubric checklist
+
+| Bonus task | Status |
+|------------|--------|
+| MCP agent chat with approval UI | Done |
+| Gmail + Calendar webhooks | Done |
+| Command palette (`Mod+K`) | Done |
+| Keyboard shortcut registry + cheat sheet | Done |
+| AI priority triage lanes | Done |
+| Corsair Gmail advanced search UI | Done |
+| pgvector semantic search (`/`) | Done |
+| PWA + mobile tabs / swipe gestures | Done |
+| Send-later + snooze cron | Done (external pinger) |
+| Multi-provider AI fallback | Done |
+
 ## Deploy (Vercel + Neon)
 
-1. Create Neon project with pgvector extension
-2. Import repo to Vercel; set all env vars from `.env.example`
-3. Run migrations against production DB: `bun run db:migrate`
-4. Set production `APP_URL` and Gmail Pub/Sub push endpoint
-5. Schedule cron: POST `https://your-app.vercel.app/api/cron/process-due` every minute with `Authorization: Bearer $CRON_SECRET`
+Full production guide: **[docs/deploy.md](docs/deploy.md)**
+
+Quick checklist:
+
+1. Create Neon project with pgvector → `bun run db:migrate`
+2. Import repo to Vercel → set env vars from `.env.example`
+3. Set `BETTER_AUTH_URL` and `APP_URL` to your Vercel domain
+4. Add Google OAuth redirect URIs for production
+5. Configure Gmail Pub/Sub → `GMAIL_PUBSUB_TOPIC`
+6. Schedule cron: POST `/api/cron/process-due` every minute with `Authorization: Bearer $CRON_SECRET` ([cron-job.org](https://cron-job.org) — Vercel Hobby cron is daily-only)
+
+`vercel.json` configures Bun install/build. Migrations run manually against Neon, not during Vercel build.
 
 ## Google OAuth testing mode
 
-Keep the OAuth app in **Testing** and add judge emails as test users. Document test user emails in your demo README / video notes.
+Keep the OAuth app in **Testing** and add judge emails as test users. Document test user emails in your demo notes.
 
-## Demo script (60s)
+## Demo video
+
+Script with timestamps: **[docs/demo-script.md](docs/demo-script.md)**
+
+**90-second outline:**
 
 1. **Problem** — scheduling email = 10+ clicks across Gmail + Calendar  
 2. **Triage** — show Reply / Schedule / FYI lanes updating live via webhook  

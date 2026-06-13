@@ -1,0 +1,12 @@
+{
+  "title": "Reference",
+  "pages": [
+    "environment",
+    "api-routes",
+    "database-schema",
+    "keyboard-shortcuts",
+    "ai-configuration",
+    "scripts-cli",
+    "corsair-mcp-tools"
+  ]
+}

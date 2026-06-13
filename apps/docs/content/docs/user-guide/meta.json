@@ -1,0 +1,14 @@
+{
+  "title": "User Guide",
+  "pages": [
+    "getting-started",
+    "triage-lanes",
+    "keyboard-shortcuts",
+    "semantic-search",
+    "advanced-search",
+    "schedule-meeting",
+    "agent-chat",
+    "snooze-send-later",
+    "mobile-pwa"
+  ]
+}

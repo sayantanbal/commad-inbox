@@ -1,0 +1,63 @@
+---
+title: Semantic search
+description: Search classified threads by meaning with pgvector
+---
+
+Press **`/`** anywhere in the inbox to open **semantic search**.
+
+Unlike Gmail keyword search, semantic search finds threads by **meaning** — e.g. searching *"contract renewal"* can surface emails that discuss extending an agreement without using those exact words.
+
+## How it works
+
+1. Your query is embedded with the **active AI provider's** embedding model
+2. pgvector compares your query vector to stored thread embeddings
+3. Results rank by cosine similarity
+4. Only threads you have **classified** (backfill complete + webhooks) appear
+
+## Using semantic search
+
+1. Press **`/`**
+2. Type a natural-language query (1–500 characters)
+3. Results show subject, sender, snippet, lane, priority, and relevance score
+4. Click a result to open the thread
+
+Results return empty if:
+
+- Backfill has not completed yet
+- No threads match above the similarity threshold
+- You switched embedding provider and re-embed is still running
+
+## Provider switcher interaction
+
+Embeddings are **provider-specific**. Each classification row stores which provider created its vector (`openai` or `gemini`).
+
+When you switch providers in the header:
+
+1. A **re-embed job** starts in the background
+2. An activity banner shows progress
+3. Semantic search uses the new provider's embeddings after re-embed completes
+
+You can also trigger re-embed via `POST /api/inbox/reembed` (see [API routes](/docs/reference/api-routes)).
+
+## Semantic vs advanced search
+
+| Feature | Semantic (`/`) | Advanced (`Mod+Shift+F`) |
+|---------|----------------|---------------------------|
+| Data source | Classified threads in app DB | Full Gmail via Corsair API |
+| Query style | Natural language | Structured filters + Gmail query syntax |
+| Requires backfill | Yes | No |
+| Requires AI key | Yes | No |
+| Best for | "Find that email about pricing" | "All PDFs from alice@co.com last month" |
+
+Use both — they complement each other.
+
+## Tips
+
+- Keep queries focused: *"Q3 board meeting reschedule"* beats *"meeting"*
+- Check you're on the provider you embedded with (see header switcher)
+- If results seem stale after new mail, wait a few seconds for webhook classification
+
+## Related
+
+- [Advanced search](/docs/user-guide/advanced-search)
+- [AI configuration](/docs/reference/ai-configuration)

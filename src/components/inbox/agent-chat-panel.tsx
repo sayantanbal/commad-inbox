@@ -10,8 +10,8 @@ import {
   type ToolUIPart,
   type UIMessage,
 } from "ai";
-import { Bot, Loader2, Send } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Bot, Clock, Loader2, Plus, Send, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentToolApproval } from "@/components/inbox/agent-tool-approval";
 import { AiProviderSelect } from "@/components/inbox/ai-provider-select";
 import { Button } from "@/components/ui/button";
@@ -20,23 +20,31 @@ import { getAlternateProvider } from "@/lib/ai/alternate-provider";
 import { AI_PROVIDER_CONFIG } from "@/lib/ai/providers";
 import { isRateLimitError } from "@/lib/ai/rate-limit";
 import { useAiProvider } from "@/hooks/use-ai-provider";
+import {
+  createAgentConversationApi,
+  listAgentConversationsApi,
+  loadAgentConversationApi,
+  saveAgentConversationApi,
+  type AgentConversationItem,
+} from "@/lib/inbox/client-api";
+import { WELCOME_MESSAGE_ID } from "@/lib/agent/constants";
 import { cn } from "@/lib/utils";
 
 const EXAMPLE_PROMPT =
   'Send a calendar invite to friend@corsair.dev at 9 AM next Thursday, and email him saying I look forward to it';
 
-const starterMessages: UIMessage[] = [
-  {
-    id: "welcome",
+function welcomeMessage(): UIMessage {
+  return {
+    id: WELCOME_MESSAGE_ID,
     role: "assistant",
     parts: [
       {
         type: "text",
-        text: `Try: "${EXAMPLE_PROMPT}"`,
+        text: `I help with Gmail and Google Calendar — sending mail, scheduling invites, and inbox coordination.\n\nTry: "${EXAMPLE_PROMPT}"`,
       },
     ],
-  },
-];
+  };
+}
 
 type ToolPart = ToolUIPart | DynamicToolUIPart;
 
@@ -68,23 +76,35 @@ function renderToolPart(
   }
 
   if (part.state === "input-streaming" || part.state === "input-available") {
+    const label =
+      toolName === "send_email"
+        ? "Preparing email…"
+        : toolName === "create_calendar_invite"
+          ? "Preparing calendar invite…"
+          : `Processing ${toolName}…`;
     return (
       <div
         key={part.toolCallId}
         className="mr-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
       >
-        Running {toolName}…
+        {label}
       </div>
     );
   }
 
   if (part.state === "output-available") {
+    const label =
+      toolName === "send_email"
+        ? "Email sent"
+        : toolName === "create_calendar_invite"
+          ? "Calendar invite sent"
+          : `${toolName} completed`;
     return (
       <details
         key={part.toolCallId}
         className="mr-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs"
       >
-        <summary className="cursor-pointer text-muted-foreground">{toolName} completed</summary>
+        <summary className="cursor-pointer text-muted-foreground">{label}</summary>
         <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap text-[10px] text-foreground/80">
           {typeof part.output === "string"
             ? part.output
@@ -119,14 +139,38 @@ function renderToolPart(
   return null;
 }
 
+function ThinkingIndicator({ label }: { label: string }) {
+  return (
+    <div className="mr-2 flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      {label}
+    </div>
+  );
+}
+
 export function AgentChatPanel() {
   const [input, setInput] = useState("");
+  const [conversations, setConversations] = useState<AgentConversationItem[]>([]);
+  const [openTabIds, setOpenTabIds] = useState<string[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([welcomeMessage()]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const { provider, setProvider } = useAiProvider();
   const providerRef = useRef(provider);
+  const conversationIdRef = useRef(conversationId);
   const lastUserTextRef = useRef<string | null>(null);
   const fallbackAttemptRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSendRef = useRef<string | null>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
+  const autoOpenedRef = useRef(false);
 
   providerRef.current = provider;
+  conversationIdRef.current = conversationId;
+
+  const chatId = conversationId ?? "draft";
 
   const transport = useMemo(
     () =>
@@ -136,21 +180,155 @@ export function AgentChatPanel() {
           ...rest,
           body: {
             ...body,
-            messages,
+            messages: messages.filter((m) => m.id !== WELCOME_MESSAGE_ID),
             provider: providerRef.current,
+            conversationId: conversationIdRef.current ?? undefined,
           },
         }),
       }),
     []
   );
 
-  const { messages, sendMessage, addToolApprovalResponse, status, error } = useChat({
+  const { messages, sendMessage, setMessages, addToolApprovalResponse, status, error } = useChat({
+    id: chatId,
     transport,
-    messages: starterMessages,
+    messages: initialMessages,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
   const isBusy = status === "submitted" || status === "streaming";
+
+  const refreshConversations = useCallback(async () => {
+    try {
+      const { conversations: list } = await listAgentConversationsApi();
+      setConversations(list);
+      setHistoryError(null);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Could not load chat history");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshConversations().finally(() => setHistoryLoading(false));
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (historyRef.current && !historyRef.current.contains(event.target as Node)) {
+        setHistoryOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [historyOpen]);
+
+  const ensureConversation = useCallback(async () => {
+    if (conversationIdRef.current) return conversationIdRef.current;
+    const { conversation } = await createAgentConversationApi();
+    setConversationId(conversation.id);
+    conversationIdRef.current = conversation.id;
+    setOpenTabIds((prev) => (prev.includes(conversation.id) ? prev : [...prev, conversation.id]));
+    await refreshConversations();
+    return conversation.id;
+  }, [refreshConversations]);
+
+  const startNewChat = useCallback(async () => {
+    try {
+      const { conversation } = await createAgentConversationApi();
+      setConversationId(conversation.id);
+      conversationIdRef.current = conversation.id;
+      setOpenTabIds((prev) => [...prev, conversation.id]);
+      setInitialMessages([welcomeMessage()]);
+      setMessages([welcomeMessage()]);
+      setHistoryOpen(false);
+      await refreshConversations();
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Could not start a new chat");
+    }
+  }, [refreshConversations, setMessages]);
+
+  const openConversation = useCallback(
+    async (id: string) => {
+      try {
+        setConversationId(id);
+        conversationIdRef.current = id;
+        setOpenTabIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        const { messages: stored } = await loadAgentConversationApi(id);
+        const next = stored.length > 0 ? stored : [welcomeMessage()];
+        setInitialMessages(next);
+        setMessages(next);
+        setHistoryOpen(false);
+      } catch (err) {
+        setHistoryError(err instanceof Error ? err.message : "Could not open chat");
+      }
+    },
+    [setMessages]
+  );
+
+  useEffect(() => {
+    if (historyLoading || autoOpenedRef.current || conversationId) return;
+    if (conversations.length === 0) return;
+    autoOpenedRef.current = true;
+    void openConversation(conversations[0].id);
+  }, [historyLoading, conversations, conversationId, openConversation]);
+
+  const closeTab = useCallback(
+    (id: string) => {
+      setOpenTabIds((prev) => {
+        const next = prev.filter((tabId) => tabId !== id);
+        if (conversationId === id) {
+          const fallback = next[next.length - 1];
+          if (fallback) {
+            void openConversation(fallback);
+          } else {
+            setConversationId(null);
+            conversationIdRef.current = null;
+            setInitialMessages([welcomeMessage()]);
+            setMessages([welcomeMessage()]);
+          }
+        }
+        return next;
+      });
+    },
+    [conversationId, openConversation, setMessages]
+  );
+
+  useEffect(() => {
+    if (historyLoading || autoOpenedRef.current || conversationId) return;
+    if (conversations.length > 0) return;
+    void ensureConversation();
+  }, [historyLoading, conversations.length, conversationId, ensureConversation]);
+
+  useEffect(() => {
+    if (!conversationId || !pendingSendRef.current || isBusy) return;
+    const text = pendingSendRef.current;
+    pendingSendRef.current = null;
+    void sendMessage({ text });
+  }, [conversationId, isBusy, sendMessage]);
+
+  useEffect(() => {
+    if (!conversationId || status !== "ready") return;
+
+    const persistable = messages.filter(
+      (m) =>
+        (m.role === "user" || m.role === "assistant") && m.id !== WELCOME_MESSAGE_ID
+    );
+    if (persistable.length === 0) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveAgentConversationApi(conversationId, messages)
+        .then(() => refreshConversations())
+        .catch((err) => {
+          setHistoryError(err instanceof Error ? err.message : "Could not save chat");
+        });
+    }, 400);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [conversationId, messages, status, refreshConversations]);
 
   useEffect(() => {
     if (!error || fallbackAttemptRef.current || isBusy) return;
@@ -174,15 +352,143 @@ export function AgentChatPanel() {
     setInput("");
     lastUserTextRef.current = text;
     fallbackAttemptRef.current = false;
+
+    if (!conversationIdRef.current) {
+      pendingSendRef.current = text;
+      void ensureConversation();
+      return;
+    }
+
     void sendMessage({ text });
   };
 
+  const openTabs = openTabIds
+    .map((id) => conversations.find((c) => c.id === id))
+    .filter((c): c is AgentConversationItem => !!c);
+
+  const activeTitle =
+    conversations.find((c) => c.id === conversationId)?.title ??
+    (conversationId ? "Chat" : "New chat");
+
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const hasStreamingText =
+    lastAssistant?.parts.some((p) => isTextPart(p) && p.text.trim().length > 0) ?? false;
+  const hasActiveTool = messages.some((m) =>
+    m.parts.some(
+      (p) =>
+        isToolUIPart(p) &&
+        p.state !== "output-available" &&
+        p.state !== "output-denied" &&
+        p.state !== "output-error"
+    )
+  );
+
+  let statusLabel: string | null = null;
+  if (status === "submitted") statusLabel = "Thinking…";
+  else if (status === "streaming" && !hasStreamingText && !hasActiveTool)
+    statusLabel = "Processing…";
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card">
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+      <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {openTabs.length === 0 ? (
+            <span className="truncate px-2 text-[11px] text-muted-foreground">{activeTitle}</span>
+          ) : (
+            openTabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={cn(
+                  "group flex max-w-[140px] shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px]",
+                  conversationId === tab.id
+                    ? "border-border bg-muted/60 text-foreground"
+                    : "border-transparent text-muted-foreground hover:bg-muted/40"
+                )}
+              >
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left"
+                  onClick={() => void openConversation(tab.id)}
+                >
+                  {tab.title}
+                </button>
+                <button
+                  type="button"
+                  className="rounded p-0.5 opacity-60 hover:bg-muted hover:opacity-100"
+                  onClick={() => closeTab(tab.id)}
+                  aria-label={`Close ${tab.title}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={() => void startNewChat()}
+            aria-label="New chat"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <div className="relative shrink-0" ref={historyRef}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setHistoryOpen((open) => !open)}
+            aria-label="Show chat history"
+            title="Show chat history"
+          >
+            <Clock className="h-3.5 w-3.5" />
+          </Button>
+          {historyOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-popover shadow-lg">
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Chat history
+                </p>
+              </div>
+              <ScrollArea className="max-h-64">
+                <div className="p-1">
+                  {historyLoading && (
+                    <p className="px-2 py-2 text-[10px] text-muted-foreground">Loading…</p>
+                  )}
+                  {historyError && !historyLoading && (
+                    <p className="px-2 py-2 text-[10px] text-destructive">{historyError}</p>
+                  )}
+                  {!historyLoading && conversations.length === 0 && (
+                    <p className="px-2 py-2 text-[10px] text-muted-foreground">No previous chats</p>
+                  )}
+                  {conversations.map((conversation) => (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() => void openConversation(conversation.id)}
+                      className={cn(
+                        "w-full rounded-md px-2 py-2 text-left text-[11px] leading-snug transition-colors",
+                        conversationId === conversation.id
+                          ? "bg-primary/15 text-foreground"
+                          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      )}
+                    >
+                      <span className="line-clamp-2">{conversation.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <Bot className="h-4 w-4 text-primary" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold">Agent</p>
+          <p className="truncate text-xs font-semibold">{activeTitle}</p>
           <p className="truncate text-[10px] text-muted-foreground">
             {AI_PROVIDER_CONFIG[provider].chatLabel} · auto-fallback on rate limits
           </p>
@@ -220,6 +526,8 @@ export function AgentChatPanel() {
             </div>
           ))}
 
+          {statusLabel && <ThinkingIndicator label={statusLabel} />}
+
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error.message}
@@ -247,7 +555,12 @@ export function AgentChatPanel() {
             disabled={isBusy}
             className="flex-1 rounded-md border border-border bg-input px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           />
-          <Button size="icon" onClick={handleSend} disabled={isBusy || !input.trim()} aria-label="Send message">
+          <Button
+            size="icon"
+            onClick={handleSend}
+            disabled={isBusy || !input.trim()}
+            aria-label="Send message"
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>

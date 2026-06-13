@@ -1,0 +1,13 @@
+{
+  "title": "Developer Guide",
+  "pages": [
+    "local-development",
+    "environment-variables",
+    "database-migrations",
+    "corsair-setup",
+    "webhooks-realtime",
+    "ai-providers",
+    "deploy-production",
+    "troubleshooting"
+  ]
+}

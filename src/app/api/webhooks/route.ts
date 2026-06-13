@@ -1,6 +1,7 @@
 import { processWebhook } from "corsair";
 import { corsair } from "@/lib/corsair";
 import { handleGmailMessageChanged } from "@/lib/webhooks/gmail-event";
+import { handleCalendarEventChanged } from "@/lib/webhooks/calendar-event";
 import { logWebhookAttempt } from "@/lib/webhooks/log";
 
 export const runtime = "nodejs";
@@ -54,6 +55,12 @@ export async function POST(request: Request) {
     if (result.plugin === "gmail" && result.action === "messageChanged") {
       void handleGmailMessageChanged(tenantId, result.body).catch((error) => {
         console.error("[webhook] gmail classify failed", error);
+      });
+    }
+
+    if (result.plugin === "googlecalendar" && result.action === "eventChanged") {
+      void handleCalendarEventChanged(tenantId).catch((error) => {
+        console.error("[webhook] calendar sync failed", error);
       });
     }
 

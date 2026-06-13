@@ -1,0 +1,91 @@
+---
+title: Database and migrations
+description: Neon Postgres, pgvector, Drizzle schema, and migration workflow
+---
+
+## Database requirements
+
+- **Postgres 16+** (Neon recommended)
+- **pgvector** extension enabled
+- **Pooled connection string** for serverless (Neon `-pooler` host)
+
+Migrations include extension setup in `drizzle/0000_init.sql`.
+
+## Running migrations
+
+```bash
+# With DATABASE_URL in .env.local
+bun run db:migrate
+```
+
+The migrate script (`scripts/migrate.ts`) applies all SQL files in `drizzle/` in order.
+
+## Migration history
+
+| File | Purpose |
+|------|---------|
+| `0000_init.sql` | pgvector extension, app tables, enums |
+| `0001_better_auth.sql` | Better Auth tables |
+| `0002_backfill_column.sql` | `users.backfill_completed_at` |
+| `0003_thread_meetings.sql` | `thread_meetings` table |
+| `0004_embedding_provider.sql` | `classifications.embedding_provider` |
+
+Corsair creates **additional tables** via `bun run corsair:setup` — not managed by Drizzle migrations.
+
+## Drizzle Studio
+
+Inspect data interactively:
+
+```bash
+bun run db:studio
+```
+
+Useful tables for debugging:
+
+- `users` — tenant IDs, backfill status
+- `classifications` — lanes, embeddings, scheduling intent
+- `webhook_logs` — inbound webhook audit
+- `snoozes`, `scheduled_sends`, `thread_meetings`
+
+## Schema source of truth
+
+Application schema: `src/lib/db/schema.ts`
+
+Auth schema: `src/lib/db/auth-schema.ts` (re-exported from schema)
+
+Key enums:
+
+- `triage_lane`: `reply`, `schedule`, `fyi`, `done`
+- `priority`: `high`, `medium`, `low`
+- `draft_tone`: `professional`, `friendly`, `brief`
+- `scheduled_send_status`: `pending`, `sent`, `cancelled`, `failed`
+
+## pgvector embeddings
+
+`classifications.embedding` is a **768-dimensional** vector (`EMBEDDING_DIMENSIONS` in `providers.ts`).
+
+Index strategy uses user-scoped queries:
+
+- `classifications_user_idx`
+- `classifications_user_thread_idx`
+- `classifications_user_provider_idx`
+
+Semantic search filters by `userId` and active `embedding_provider`.
+
+## Production migrations
+
+Migrations run **manually** against Neon — they are **not** part of the Vercel build.
+
+Recommended flow:
+
+1. Set `DATABASE_URL` to production Neon URL locally
+2. Run `bun run db:migrate`
+3. Run `bun run corsair:setup` if fresh database
+4. Deploy app
+
+Never run `corsair:reset` against production unless you intend to wipe OAuth tokens.
+
+## Related
+
+- [Database schema reference](/docs/reference/database-schema)
+- [Local development](/docs/developer-guide/local-development)

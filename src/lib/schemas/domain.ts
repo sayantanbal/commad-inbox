@@ -39,6 +39,56 @@ export const schedulingIntentStoredSchema = z
 
 export type SchedulingIntentStored = z.infer<typeof schedulingIntentStoredSchema>;
 
+export const suggestedActionTypeSchema = z.enum([
+  "reply",
+  "archive",
+  "schedule",
+  "snooze",
+  "compose",
+  "open_thread",
+]);
+
+export type SuggestedActionType = z.infer<typeof suggestedActionTypeSchema>;
+
+export const suggestedActionSchema = z
+  .object({
+    label: z.string().min(1),
+    type: suggestedActionTypeSchema,
+    threadId: threadIdField.optional(),
+    draftText: z.string().optional(),
+  })
+  .strict();
+
+export type SuggestedAction = z.infer<typeof suggestedActionSchema>;
+
+export const aiSummarySchema = z
+  .object({
+    bullets: z.array(z.string()).min(1).max(6),
+    actions: z.array(suggestedActionSchema).max(4),
+  })
+  .strict();
+
+export type AiSummary = z.infer<typeof aiSummarySchema>;
+
+export const dailyBriefItemSchema = z
+  .object({
+    label: z.string().min(1),
+    text: z.string().min(1),
+    actions: z.array(suggestedActionSchema).max(3).optional(),
+  })
+  .strict();
+
+export const dailyBriefSchema = z
+  .object({
+    greeting: z.string().min(1),
+    subtitle: z.string().min(1),
+    items: z.array(dailyBriefItemSchema).min(1).max(8),
+  })
+  .strict();
+
+export type DailyBrief = z.infer<typeof dailyBriefSchema>;
+export type DailyBriefItem = z.infer<typeof dailyBriefItemSchema>;
+
 /** Gemini classifier JSON output. */
 export const classificationResultSchema = z
   .object({
