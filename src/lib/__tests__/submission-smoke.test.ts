@@ -78,22 +78,19 @@ describe("buildGmailSearchQuery", () => {
 });
 
 describe("gmail webhook event filtering", () => {
-  function shouldClassifyWebhook(body: unknown): boolean {
-    const event = body as { type?: string; message?: { threadId?: string } };
-    return event.type === "messageReceived" && Boolean(event.message?.threadId);
-  }
-
   test("classifies messageReceived with threadId", () => {
+    const { shouldClassifyGmailEvent } = require("@/lib/webhooks/gmail-event");
     expect(
-      shouldClassifyWebhook({
+      shouldClassifyGmailEvent({
         type: "messageReceived",
         message: { threadId: "thread-abc" },
       })
     ).toBe(true);
   });
 
-  test("ignores non-inbound events", () => {
-    expect(shouldClassifyWebhook({ type: "messageDeleted" })).toBe(false);
-    expect(shouldClassifyWebhook({ type: "messageReceived", message: {} })).toBe(false);
+  test("ignores non-inbound events for classification", () => {
+    const { shouldClassifyGmailEvent } = require("@/lib/webhooks/gmail-event");
+    expect(shouldClassifyGmailEvent({ type: "messageDeleted" })).toBe(false);
+    expect(shouldClassifyGmailEvent({ type: "messageReceived", message: {} })).toBe(false);
   });
 });

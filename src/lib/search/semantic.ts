@@ -35,7 +35,7 @@ export async function semanticSearch(
     return [];
   }
 
-  const { vector } = await embedWithProvider(provider, query.trim());
+  const { vector } = await embedWithProvider(userId, provider, query.trim());
   const literal = `[${vector.join(",")}]`;
 
   const rows = await db.execute<{

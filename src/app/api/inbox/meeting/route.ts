@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { generateConfirmationDraft } from "@/lib/ai/drafts";
-import { assertPhase2Env } from "@/lib/env";
+import { assertAiAvailable } from "@/lib/ai/runtime";
+import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import {
   cancelCalendarEvent,
   createCalendarEventWithMeet,
@@ -44,8 +45,10 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(auth.userId);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "AI not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }
@@ -86,6 +89,7 @@ export async function POST(request: Request) {
     });
 
     const draftHtml = await generateConfirmationDraft({
+      userId: auth.userId,
       thread,
       slotStart,
       durationMinutes,
@@ -125,8 +129,10 @@ export async function PATCH(request: Request) {
   if ("error" in auth) return auth.error;
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(auth.userId);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "AI not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }
@@ -157,6 +163,7 @@ export async function PATCH(request: Request) {
     });
 
     const draftHtml = await generateConfirmationDraft({
+      userId: auth.userId,
       thread,
       slotStart,
       durationMinutes,

@@ -6,6 +6,7 @@ import {
   json,
   pgEnum,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -286,6 +287,23 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const userAiKeys = pgTable(
+  "user_ai_keys",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    encryptedKey: text("encrypted_key").notNull(),
+    keyHint: text("key_hint").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.provider] }),
+    index("user_ai_keys_user_idx").on(table.userId),
+  ]
+);
+
 export const externalConnections = pgTable(
   "external_connections",
   {
@@ -368,6 +386,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   contacts: many(contacts),
   emailSnippets: many(emailSnippets),
   preferences: one(userPreferences),
+  aiKeys: many(userAiKeys),
   externalConnections: many(externalConnections),
   threadExternalTasks: many(threadExternalTasks),
   focusAutoReplies: many(focusAutoReplies),

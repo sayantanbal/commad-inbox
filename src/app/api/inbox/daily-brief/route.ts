@@ -10,7 +10,8 @@ import { generateDailyBrief, streamDailyBrief } from "@/lib/ai/daily-brief";
 import { getClassificationsForUser } from "@/lib/corsair/classifications";
 import { fetchEventsForTenant } from "@/lib/corsair/events";
 import { fetchThreadsForTenant } from "@/lib/corsair/threads";
-import { assertPhase2Env } from "@/lib/env";
+import { assertAiAvailable } from "@/lib/ai/runtime";
+import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import { DEFAULT_AI_PROVIDER } from "@/lib/ai/providers";
 import { dailyBriefBodySchema } from "@/lib/schemas/api";
 import type { DailyBrief } from "@/lib/schemas/domain";
@@ -32,8 +33,10 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(auth.userId);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "AI not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }
@@ -86,6 +89,7 @@ export async function POST(request: Request) {
           send({ type: "status", message: "Writing your brief…" });
 
           const { brief, provider: used } = await streamDailyBrief(
+            auth.userId,
             { ...briefParams, threads, classifications, events },
             provider,
             (partial) => send({ type: "partial", brief: partial })
@@ -132,6 +136,7 @@ export async function POST(request: Request) {
       }
 
       const { brief, provider: used } = await generateDailyBrief(
+        auth.userId,
         { ...briefParams, threads, classifications, events },
         provider
       );

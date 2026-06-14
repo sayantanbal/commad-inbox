@@ -32,6 +32,9 @@ export const AI_PROVIDER_CONFIG = {
 
 export const AI_PROVIDER_STORAGE_KEY = "command-inbox-ai-provider-v2";
 
+export const AI_NOT_CONFIGURED_MESSAGE =
+  "No AI provider configured. Add a Gemini or OpenAI key in Settings → AI.";
+
 function readDefaultAiProvider(): AiProvider {
   const fromEnv =
     typeof process !== "undefined" ? process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER : undefined;

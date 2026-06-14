@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addMinutes, format } from "date-fns";
 import { Activity, Command, Keyboard, Search, Settings } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import { ActivityBar } from "@/components/inbox/activity-bar";
@@ -13,7 +13,7 @@ import { CalendarPanel } from "@/components/inbox/calendar-panel";
 import { DefragPanel } from "@/components/inbox/defrag-panel";
 import { CommitmentsPanel } from "@/components/inbox/commitments-panel";
 import { ExportTaskModal } from "@/components/inbox/export-task-modal";
-import { FocusModeSettings } from "@/components/inbox/focus-mode-settings";
+import { InboxSettingsPanel } from "@/components/inbox/inbox-settings-panel";
 import { MeetingPreBriefPanel } from "@/components/inbox/meeting-pre-brief-panel";
 import { DailyBriefPanel } from "@/components/inbox/daily-brief-panel";
 import { MailboxEmptyState } from "@/components/inbox/mailbox-empty-state";
@@ -54,6 +54,7 @@ import {
   confirmCommitmentApi,
   exportTaskApi,
   fetchCommitmentsApi,
+  fetchInboxSyncApi,
   fetchMailboxThreadsApi,
   fetchPreBriefApi,
   fetchPreferencesApi,
@@ -73,7 +74,7 @@ import { useAiProvider } from "@/hooks/use-ai-provider";
 import { useIsMobile, usePlatform } from "@/hooks/use-platform";
 import type { MeetingBriefStored, SendTimeSuggestion, SuggestedAction } from "@/lib/schemas/domain";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
-import { deserializeThreads } from "@/lib/inbox-serialize";
+import { deserializeInboxData, deserializeThreads } from "@/lib/inbox-serialize";
 import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
 import type { CalendarEvent, Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
 
@@ -214,7 +215,7 @@ export function InboxShell({
   const [linearToken, setLinearToken] = useState("");
   const [linearTeamId, setLinearTeamId] = useState("");
   const [undo, setUndo] = useState<UndoState | null>(null);
-  const { provider } = useAiProvider();
+  const { provider, aiKeysStatus, setAiKeysStatus, refreshAiKeysStatus } = useAiProvider();
 
   const snoozedIds = useMemo(() => new Set(snoozed.map((s) => s.threadId)), [snoozed]);
 
@@ -379,19 +380,82 @@ export function InboxShell({
     }
   }, [backfillComplete]);
 
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mailboxViewRef = useRef(mailboxView);
+  mailboxViewRef.current = mailboxView;
+
+  const syncInbox = useCallback(async () => {
+    try {
+      const serialized = await fetchInboxSyncApi();
+      const data = deserializeInboxData(serialized);
+      setLiveThreads(data.threads);
+      setClassifications(data.classifications);
+      setCalendarEvents(data.events);
+      setThreadMeetings(data.threadMeetings);
+      setSelectedThreadId((prev) => {
+        if (!prev) return prev;
+        if (data.threads.some((thread) => thread.id === prev)) return prev;
+        const next = data.threads.find(
+          (thread) =>
+            data.classifications.find((classification) => classification.threadId === thread.id)
+              ?.lane === activeLane
+        );
+        return next?.id ?? data.threads[0]?.id ?? null;
+      });
+      if (mailboxViewRef.current === "sent") {
+        const { threads } = await fetchMailboxThreadsApi("sent");
+        setSentThreads(deserializeThreads(threads));
+      }
+    } catch {
+      /* ignore transient sync errors */
+    }
+  }, [activeLane]);
+
+  const scheduleSyncInbox = useCallback(() => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+    syncTimerRef.current = setTimeout(() => {
+      syncTimerRef.current = null;
+      void syncInbox();
+    }, 400);
+  }, [syncInbox]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncInbox();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [syncInbox]);
+
+  useEffect(
+    () => () => {
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+      }
+    },
+    []
+  );
+
   const handleRealtimeEvent = useCallback((event: InboxRealtimeEvent) => {
+    if (event.type === "inbox-changed") {
+      scheduleSyncInbox();
+      return;
+    }
     if (event.type === "classification-updated") {
       setClassifications((prev) => mergeClassifications(prev, event.classification));
-      if (!prefs.focusModeEnabled) {
-        setBriefInvalidationKey((key) => key + 1);
-        router.refresh();
-      }
+      setBriefInvalidationKey((key) => key + 1);
+      scheduleSyncInbox();
       return;
     }
     if (event.type === "calendar-updated") {
       void loadCalendarMonth(new Date());
       setBriefInvalidationKey((key) => key + 1);
-      router.refresh();
+      scheduleSyncInbox();
+      return;
     }
     if (event.type === "backfill-progress") {
       const pct = event.total > 0 ? Math.round((event.completed / event.total) * 100) : 0;
@@ -409,7 +473,7 @@ export function InboxShell({
     }
     if (event.type === "backfill-complete") {
       setActivities((prev) => prev.filter((a) => a.id !== "backfill"));
-      router.refresh();
+      scheduleSyncInbox();
     }
     if (event.type === "reembed-progress") {
       const pct = event.total > 0 ? Math.round((event.completed / event.total) * 100) : 0;
@@ -440,13 +504,13 @@ export function InboxShell({
     }
     if (event.type === "reembed-complete") {
       setActivities((prev) => prev.filter((a) => a.id !== "reembed"));
-      router.refresh();
+      scheduleSyncInbox();
     }
-  }, [router, loadCalendarMonth, prefs.focusModeEnabled]);
+  }, [loadCalendarMonth, scheduleSyncInbox]);
 
   const pollInbox = useCallback(() => {
-    router.refresh();
-  }, [router]);
+    scheduleSyncInbox();
+  }, [scheduleSyncInbox]);
 
   useInboxRealtime(userId, handleRealtimeEvent, pollInbox);
 
@@ -1520,6 +1584,10 @@ export function InboxShell({
           userEmail={userEmail}
           onShortcut={(action) => {
             if (action === "shortcuts") setCheatsheetOpen(true);
+            else if (action === "settings") {
+              void refreshAiKeysStatus();
+              setSettingsOpen(true);
+            }
             else if (action === "nav-commitments") openCommitments("commitments");
             else if (action === "nav-waiting") openCommitments("waiting");
           }}
@@ -1552,6 +1620,10 @@ export function InboxShell({
                 provider={provider}
                 invalidationKey={briefInvalidationKey}
                 onAction={handleSuggestedAction}
+                onOpenSettings={() => {
+                  void refreshAiKeysStatus();
+                  setSettingsOpen(true);
+                }}
               />
             )}
             {primaryView === "inbox" && renderThreadPanel()}
@@ -1571,7 +1643,12 @@ export function InboxShell({
                   resizeTargetMinimumSize={{ coarse: 28, fine: 12 }}
                 >
                   <Panel id="agent" defaultSize="38%" minSize="12%" maxSize="75%" className="min-h-0">
-                    <AgentChatPanel />
+                    <AgentChatPanel
+                      onOpenSettings={() => {
+                        void refreshAiKeysStatus();
+                        setSettingsOpen(true);
+                      }}
+                    />
                   </Panel>
                   {primaryView === "inbox" && (
                     <>
@@ -1595,12 +1672,23 @@ export function InboxShell({
               provider={provider}
               invalidationKey={briefInvalidationKey}
               onAction={handleSuggestedAction}
+              onOpenSettings={() => {
+                void refreshAiKeysStatus();
+                setSettingsOpen(true);
+              }}
             />
           )}
           {mobileTab === "inbox" && !mobileThreadOpen && renderListPanel(true)}
           {mobileTab === "inbox" && mobileThreadOpen && renderThreadPanel(() => setMobileThreadOpen(false))}
           {mobileTab === "calendar" && renderCalendarContent()}
-          {mobileTab === "agent" && <AgentChatPanel />}
+          {mobileTab === "agent" && (
+            <AgentChatPanel
+              onOpenSettings={() => {
+                void refreshAiKeysStatus();
+                setSettingsOpen(true);
+              }}
+            />
+          )}
         </div>
         </div>
 
@@ -1697,7 +1785,7 @@ export function InboxShell({
                   Close
                 </Button>
               </div>
-              <FocusModeSettings
+              <InboxSettingsPanel
                 batchWindows={prefs.batchWindows}
                 focusModeEnabled={prefs.focusModeEnabled}
                 autoResponderTemplate={prefs.autoResponderTemplate}
@@ -1720,6 +1808,8 @@ export function InboxShell({
                     showUndo("Linear connected", () => undefined)
                   );
                 }}
+                aiKeysStatus={aiKeysStatus}
+                onAiKeysStatusChange={setAiKeysStatus}
               />
             </div>
           </div>

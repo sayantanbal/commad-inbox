@@ -9,11 +9,13 @@ import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { resolveAgentModelProvider } from "@/lib/ai/with-fallback";
 import { getChatModel } from "@/lib/ai/models";
+import { resolveApiKey } from "@/lib/ai/key-store";
 import { agentStreamErrorHandler } from "@/lib/agent/error-handler";
 import { buildAgentMcpTools } from "@/lib/agent/mcp-tools";
 import { buildAgentSystemPrompt } from "@/lib/agent/system-prompt";
 import { NoAiProviderError } from "@/lib/ai/with-fallback";
-import { assertPhase2Env } from "@/lib/env";
+import { assertAiAvailable } from "@/lib/ai/runtime";
+import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import { agentChatBodySchema } from "@/lib/schemas/api";
 
 export const maxDuration = 60;
@@ -23,8 +25,10 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(auth.userId);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "AI not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }
@@ -37,8 +41,13 @@ export async function POST(request: Request) {
 
   try {
     const tools = buildAgentMcpTools(auth.tenant, auth.userId, auth.userEmail);
-    const activeProvider = resolveAgentModelProvider(provider);
-    const model = getChatModel(activeProvider);
+    const activeProvider = await resolveAgentModelProvider(auth.userId, provider);
+    const apiKey = await resolveApiKey(auth.userId, activeProvider);
+    if (!apiKey) {
+      throw new NoAiProviderError();
+    }
+
+    const model = getChatModel(activeProvider, apiKey);
     if (!model) {
       throw new NoAiProviderError();
     }
@@ -55,6 +64,8 @@ export async function POST(request: Request) {
       onError: agentStreamErrorHandler,
     });
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "Agent request failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -101,12 +101,14 @@ function formatThreadForPrompt(thread: Thread, classification: Classification | 
 }
 
 export async function generateThreadSummary(
+  userId: string,
   thread: Thread,
   classification: Classification | undefined,
   provider: AiProvider
 ) {
   const prompt = formatThreadForPrompt(thread, classification);
   const { data, provider: used } = await generateJsonWithProvider(
+    userId,
     provider,
     prompt,
     `${THREAD_SUMMARY_SYSTEM}\n\nThread id for actions: ${thread.id}`,

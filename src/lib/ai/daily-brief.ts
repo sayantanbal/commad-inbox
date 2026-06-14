@@ -60,6 +60,7 @@ function buildDailyBriefPrompt(params: {
 }
 
 export async function generateDailyBrief(
+  userId: string,
   params: {
     userName: string;
     userEmail: string;
@@ -73,6 +74,7 @@ export async function generateDailyBrief(
   const prompt = buildDailyBriefPrompt(params);
 
   const { data, provider: used } = await generateJsonWithProvider(
+    userId,
     provider,
     prompt,
     DAILY_BRIEF_SYSTEM,
@@ -83,6 +85,7 @@ export async function generateDailyBrief(
 }
 
 export async function streamDailyBrief(
+  userId: string,
   params: {
     userName: string;
     userEmail: string;
@@ -97,6 +100,7 @@ export async function streamDailyBrief(
   const prompt = buildDailyBriefPrompt(params);
 
   const { data, provider: used } = await streamJsonWithProvider(
+    userId,
     provider,
     prompt,
     DAILY_BRIEF_SYSTEM,

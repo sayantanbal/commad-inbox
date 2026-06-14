@@ -9,7 +9,7 @@ Command Inbox targets **Vercel** (app) + **Neon Postgres** (database with pgvect
 - Google Cloud project with Gmail + Calendar OAuth (Testing mode OK for judges)
 - GCP Pub/Sub topic for Gmail push (see [phase2-webhooks.md](./phase2-webhooks.md))
 - Pusher Channels app (optional; 5s poll fallback if omitted)
-- At least one AI key: `OPENAI_API_KEY` and/or `GOOGLE_GENERATIVE_AI_API_KEY`
+- At least one platform AI key recommended: `OPENAI_API_KEY` and/or `GOOGLE_GENERATIVE_AI_API_KEY` (users can also BYOK in Settings → AI)
 
 ## 1. Neon database
 
@@ -22,7 +22,7 @@ bun run db:migrate
 bun run corsair:setup
 ```
 
-Keep `CORSAIR_KEK` stable — changing it after setup requires `bun run corsair:reset`.
+Keep `CORSAIR_KEK` stable — changing it after setup requires `bun run corsair:reset`. This key also encrypts user-supplied AI API keys at rest.
 
 ## 2. Vercel project
 
@@ -117,7 +117,7 @@ Live checklist:
 | 500 on sign-in | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, OAuth redirect URIs |
 | Empty inbox after connect | Run `bun run corsair:setup` against prod DB; check Corsair tables |
 | Webhooks never fire | Pub/Sub topic IAM; `GMAIL_PUBSUB_TOPIC`; watch registered with prod `APP_URL` |
-| AI features 503 | Set `OPENAI_API_KEY` and/or `GOOGLE_GENERATIVE_AI_API_KEY` in Vercel |
+| AI features 503 | Add platform keys in Vercel **or** have the user save a Gemini/OpenAI key under Settings → AI |
 | Send-later never sends | Configure cron-job.org → `/api/cron/process-due` with `CRON_SECRET` |
 
 ## Optional: deploy from CLI

@@ -6,7 +6,8 @@ import {
   isReembedRunning,
   triggerReembedInbox,
 } from "@/lib/embeddings/reembed-inbox";
-import { assertPhase2Env } from "@/lib/env";
+import { assertAiAvailable } from "@/lib/ai/runtime";
+import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import { reembedBodySchema } from "@/lib/schemas/api";
 
 export async function POST(request: Request) {
@@ -14,8 +15,10 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(auth.userId);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "AI not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }

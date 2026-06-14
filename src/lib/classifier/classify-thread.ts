@@ -42,7 +42,10 @@ function heuristicFallback(input: ClassifyThreadInput): ClassificationResult {
   };
 }
 
-export async function classifyThread(input: ClassifyThreadInput): Promise<ClassifyThreadResult> {
+export async function classifyThread(
+  userId: string,
+  input: ClassifyThreadInput
+): Promise<ClassifyThreadResult> {
   const body = input.body.slice(0, 2000);
   const prompt = `Subject: ${input.subject}
 From: ${input.sender}
@@ -52,8 +55,10 @@ Body:
 ${body}`;
 
   try {
+    const preferred = await getDefaultProvider(userId);
     const { data } = await generateJsonWithProvider(
-      getDefaultProvider(),
+      userId,
+      preferred,
       prompt,
       SYSTEM,
       classificationAiOutputSchema

@@ -67,8 +67,10 @@ export async function generateMeetingBrief(
 
   let brief: MeetingBriefStored;
   try {
+    const preferred = await getDefaultProvider(userId);
     const { data } = await generateJsonWithProvider(
-      getDefaultProvider(),
+      userId,
+      preferred,
       prompt,
       PRE_BRIEF_SYSTEM,
       meetingBriefStoredSchema

@@ -2,7 +2,8 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { auth } from "@/lib/auth";
-import { assertPhase2Env } from "@/lib/env";
+import { assertAiAvailable } from "@/lib/ai/runtime";
+import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import { semanticSearch } from "@/lib/search/semantic";
 import { searchBodySchema } from "@/lib/schemas/api";
 
@@ -13,8 +14,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(session.user.id);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "Phase 2 not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }

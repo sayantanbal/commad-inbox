@@ -37,7 +37,8 @@ export async function processCommitmentFollowUps(
 
     const prompt = `Commitment: "${row.text}"\nCounterparty: ${row.counterpartyEmail}\nDays waiting: ${prefs.followUpDaysDefault}`;
     try {
-      const { text } = await generateTextWithProvider(getDefaultProvider(), prompt, FOLLOW_UP_SYSTEM);
+      const preferred = await getDefaultProvider(userId);
+      const { text } = await generateTextWithProvider(userId, preferred, prompt, FOLLOW_UP_SYSTEM);
       await markFollowUpQueued(userId, row.id);
       queued++;
       console.info(`[follow-up] queued draft for ${row.id}`, text.slice(0, 80));

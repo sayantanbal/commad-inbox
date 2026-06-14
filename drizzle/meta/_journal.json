@@ -64,6 +64,13 @@
       "when": 1781212000000,
       "tag": "0009_actionable_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781216000000,
+      "tag": "0010_user_ai_keys",
+      "breakpoints": true
     }
   ]
 }

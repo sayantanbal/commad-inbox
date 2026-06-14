@@ -208,3 +208,12 @@ export const linearConnectBodySchema = strictObject({
   teamId: z.string().min(1).optional(),
   defaultProjectId: z.string().min(1).optional(),
 });
+
+export const aiKeyBodySchema = strictObject({
+  provider: aiProviderSchema,
+  apiKey: z.string().trim().min(8).max(512),
+});
+
+export const aiKeyDeleteQuerySchema = z.object({
+  provider: aiProviderSchema,
+});

@@ -252,6 +252,12 @@ export async function fetchMailboxThreadsApi(label: "sent" | "inbox" = "inbox") 
   }>;
 }
 
+export async function fetchInboxSyncApi() {
+  const response = await fetch("/api/inbox/sync", { cache: "no-store" });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<import("@/lib/inbox-serialize").SerializedInboxData>;
+}
+
 export type DailyBriefStreamEvent =
   | { type: "status"; message: string }
   | { type: "partial"; brief: Partial<import("@/lib/schemas/domain").DailyBrief> }
@@ -489,6 +495,44 @@ export async function connectLinearApi(accessToken: string, teamId?: string) {
     body: JSON.stringify({ accessToken, teamId }),
   });
   if (!response.ok) throw new Error(await parseError(response));
+}
+
+export type AiKeysStatus = {
+  keys: Partial<
+    Record<
+      "openai" | "gemini",
+      { hint: string; updatedAt: string; source: "user" }
+    >
+  >;
+  platform: Record<"openai" | "gemini", boolean>;
+  available: Array<"openai" | "gemini">;
+};
+
+export async function fetchAiKeysApi() {
+  const response = await fetch("/api/inbox/ai-keys");
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<AiKeysStatus>;
+}
+
+export async function saveAiKeyApi(provider: "openai" | "gemini", apiKey: string) {
+  const response = await fetch("/api/inbox/ai-keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, apiKey }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    success: boolean;
+    key: { hint: string; updatedAt: string; source: "user" };
+  }>;
+}
+
+export async function deleteAiKeyApi(provider: "openai" | "gemini") {
+  const response = await fetch(`/api/inbox/ai-keys?provider=${provider}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<AiKeysStatus & { success: boolean }>;
 }
 
 export async function fetchSendTimeSuggestionApi(counterpartyEmail: string, threadId?: string) {

@@ -30,6 +30,10 @@ export type InboxRealtimeEvent =
     }
   | {
       type: "calendar-updated";
+    }
+  | {
+      type: "inbox-changed";
+      reason?: "gmail" | "poll";
     };
 
 let server: Pusher | null = null;

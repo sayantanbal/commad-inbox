@@ -36,11 +36,13 @@ export function useInboxRealtime(
       channel.bind("reembed-progress", handler);
       channel.bind("reembed-complete", handler);
       channel.bind("calendar-updated", handler);
+      channel.bind("inbox-changed", handler);
     }
 
+    const pollMs = PUSHER_KEY && PUSHER_CLUSTER ? 30_000 : 5_000;
     const poll = setInterval(() => {
       onPollRef.current?.();
-    }, 5000);
+    }, pollMs);
 
     return () => {
       clearInterval(poll);

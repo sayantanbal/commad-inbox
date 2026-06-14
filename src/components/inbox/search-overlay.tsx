@@ -20,7 +20,7 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
   const [results, setResults] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { provider, setProvider } = useAiProvider();
+  const { provider, setProvider, availableProviders } = useAiProvider();
 
   useEffect(() => {
     if (!open) {
@@ -74,7 +74,11 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
         </DialogHeader>
         <div className="border-b border-border px-4 py-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <AiProviderSelect value={provider} onChange={setProvider} />
+            <AiProviderSelect
+              value={provider}
+              onChange={setProvider}
+              availableProviders={availableProviders}
+            />
             <span className="text-[10px] text-muted-foreground">
               Switching re-indexes search in the background
             </span>

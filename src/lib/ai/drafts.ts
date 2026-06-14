@@ -25,11 +25,12 @@ function templateReplyDraft(input: {
 }
 
 export async function generateReplyDraft(input: {
+  userId: string;
   thread: Thread;
   tone: "professional" | "friendly" | "brief";
   provider?: AiProvider;
 }): Promise<{ draftHtml: string; source: "ai" | "template" }> {
-  const preferred = input.provider ?? getDefaultProvider();
+  const preferred = input.provider ?? (await getDefaultProvider(input.userId));
 
   try {
     const toneGuide = {
@@ -48,6 +49,7 @@ ${input.thread.messages
 Write a ${toneGuide} reply. Plain text only.`;
 
     const { text: draft } = await generateTextWithProvider(
+      input.userId,
       preferred,
       prompt,
       "You draft email replies. Plain text only, no subject line or signature block."
@@ -60,6 +62,7 @@ Write a ${toneGuide} reply. Plain text only.`;
 }
 
 export async function generateConfirmationDraft(input: {
+  userId: string;
   thread: Thread;
   slotStart: Date;
   durationMinutes: number;
@@ -68,7 +71,7 @@ export async function generateConfirmationDraft(input: {
 }): Promise<string> {
   const { format } = await import("date-fns");
   const when = format(input.slotStart, "EEEE, MMMM d 'at' h:mm a");
-  const preferred = input.provider ?? getDefaultProvider();
+  const preferred = input.provider ?? (await getDefaultProvider(input.userId));
 
   try {
     const prompt = `Thread subject: ${input.thread.subject}
@@ -81,6 +84,7 @@ ${input.hangoutLink ? `Google Meet: ${input.hangoutLink}` : ""}
 Write a short confirmation reply (2-4 sentences, professional tone). Return plain text only.`;
 
     const { text: draft } = await generateTextWithProvider(
+      input.userId,
       preferred,
       prompt,
       "You draft concise meeting confirmation emails. Plain text only, no subject line."

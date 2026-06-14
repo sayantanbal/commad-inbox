@@ -146,6 +146,7 @@ export async function extractAndPersistCommitmentsForThread(
 
   const { extractCommitmentsFromMessage } = await import("@/lib/commitments/extract");
   const extracted = await extractCommitmentsFromMessage({
+    userId,
     subject: thread.subject,
     body: latest.body,
     userEmail,

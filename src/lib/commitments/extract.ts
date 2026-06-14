@@ -15,6 +15,7 @@ Only extract clear commitments. Return empty array if none.
 Include dueDate as ISO 8601 when a deadline is mentioned. confidence 0-1.`;
 
 export async function extractCommitmentsFromMessage(params: {
+  userId: string;
   subject: string;
   body: string;
   userEmail: string;
@@ -32,8 +33,10 @@ export async function extractCommitmentsFromMessage(params: {
   ].join("\n");
 
   try {
+    const preferred = await getDefaultProvider(params.userId);
     const { data } = await generateJsonWithProvider(
-      getDefaultProvider(),
+      params.userId,
+      preferred,
       prompt,
       COMMITMENT_SYSTEM,
       commitmentExtractionResultSchema

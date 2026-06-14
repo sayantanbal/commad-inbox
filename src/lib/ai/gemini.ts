@@ -9,9 +9,15 @@ export { isRateLimitError, isRateLimitError as isGeminiQuotaError };
 const looseJsonSchema = z.record(z.string(), z.unknown());
 
 /** @deprecated Prefer generateJsonWithProvider */
-export async function geminiGenerateJson(prompt: string, system: string): Promise<unknown> {
+export async function geminiGenerateJson(
+  userId: string,
+  prompt: string,
+  system: string
+): Promise<unknown> {
+  const preferred = await getDefaultProvider(userId);
   const { data } = await generateJsonWithProvider(
-    getDefaultProvider(),
+    userId,
+    preferred,
     prompt,
     system,
     looseJsonSchema
@@ -20,13 +26,19 @@ export async function geminiGenerateJson(prompt: string, system: string): Promis
 }
 
 /** @deprecated Prefer generateTextWithProvider */
-export async function geminiGenerateText(prompt: string, system: string): Promise<string> {
-  const { text } = await generateTextWithProvider(getDefaultProvider(), prompt, system);
+export async function geminiGenerateText(
+  userId: string,
+  prompt: string,
+  system: string
+): Promise<string> {
+  const preferred = await getDefaultProvider(userId);
+  const { text } = await generateTextWithProvider(userId, preferred, prompt, system);
   return text;
 }
 
 /** @deprecated Prefer embedWithProvider */
-export async function geminiEmbed(text: string): Promise<number[]> {
-  const { vector } = await embedWithProvider(getDefaultProvider(), text);
+export async function geminiEmbed(userId: string, text: string): Promise<number[]> {
+  const preferred = await getDefaultProvider(userId);
+  const { vector } = await embedWithProvider(userId, preferred, text);
   return vector;
 }

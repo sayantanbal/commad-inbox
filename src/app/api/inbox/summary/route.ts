@@ -4,7 +4,8 @@ import { requireSessionApi } from "@/lib/api/require-session";
 import { generateThreadSummary, getCachedThreadSummary, saveThreadSummary } from "@/lib/ai/thread-summary";
 import { getClassificationsForUser } from "@/lib/corsair/classifications";
 import { mapGmailThread } from "@/lib/corsair/gmail-parse";
-import { assertPhase2Env } from "@/lib/env";
+import { assertAiAvailable } from "@/lib/ai/runtime";
+import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import { threadSummaryBodySchema } from "@/lib/schemas/api";
 
 export async function GET(request: Request) {
@@ -30,8 +31,10 @@ export async function POST(request: Request) {
   if ("error" in auth) return auth.error;
 
   try {
-    assertPhase2Env();
+    await assertAiAvailable(auth.userId);
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "AI not configured";
     return NextResponse.json({ error: message }, { status: 503 });
   }
@@ -57,6 +60,7 @@ export async function POST(request: Request) {
     const classification = classifications.find((c) => c.threadId === threadId);
 
     const { summary, provider: used } = await generateThreadSummary(
+      auth.userId,
       thread,
       classification,
       provider
@@ -66,6 +70,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ summary, source: "ai", provider: used });
   } catch (error) {
+    const response = aiErrorResponse(error);
+    if (response) return response;
     const message = error instanceof Error ? error.message : "Summary failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }

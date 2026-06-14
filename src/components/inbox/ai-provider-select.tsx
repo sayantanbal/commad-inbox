@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 interface AiProviderSelectProps {
   value: AiProvider;
   onChange: (provider: AiProvider) => void;
+  availableProviders?: AiProvider[];
   className?: string;
   disabled?: boolean;
 }
@@ -18,19 +19,25 @@ interface AiProviderSelectProps {
 export function AiProviderSelect({
   value,
   onChange,
+  availableProviders,
   className,
   disabled,
 }: AiProviderSelectProps) {
+  const options =
+    availableProviders && availableProviders.length > 0
+      ? AI_PROVIDER_IDS.filter((id) => availableProviders.includes(id))
+      : AI_PROVIDER_IDS;
+
   return (
     <div className={cn("relative inline-flex items-center", className)}>
       <select
         value={value}
-        disabled={disabled}
+        disabled={disabled || options.length === 0}
         onChange={(event) => onChange(event.target.value as AiProvider)}
         className="h-7 appearance-none rounded-md border border-border bg-background/80 py-0 pr-6 pl-2 text-[11px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         aria-label="AI provider"
       >
-        {AI_PROVIDER_IDS.map((id) => (
+        {options.map((id) => (
           <option key={id} value={id}>
             {AI_PROVIDER_CONFIG[id].chatLabel}
           </option>

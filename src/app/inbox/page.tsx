@@ -5,21 +5,14 @@ import { redirect } from "next/navigation";
 import { InboxSetupRequired } from "@/components/inbox/inbox-setup-required";
 import { GmailApiDisabledError } from "@/lib/corsair/api-errors";
 import {
-  withDefaultClassifications,
-  getClassificationsForUser,
-} from "@/lib/corsair/classifications";
-import {
   needsClassificationBoost,
   triggerInboxBackfill,
   triggerInboxReclassify,
 } from "@/lib/backfill/inbox-backfill";
 import { isBackfillComplete } from "@/lib/users/backfill-status";
-import { fetchEventsForTenant } from "@/lib/corsair/events";
-import { fetchThreadsForTenant } from "@/lib/corsair/threads";
 import { requireConnectedTenant } from "@/lib/corsair/tenant";
 import { getSnoozesForUser } from "@/lib/inbox/snoozes";
-import { getThreadMeetingsForUser } from "@/lib/inbox/thread-meetings";
-import { serializeInboxData } from "@/lib/inbox-serialize";
+import { loadInboxDataForUser } from "@/lib/inbox/load-inbox-data";
 import { renewWatchesIfNeeded } from "@/lib/webhooks/renew-watches";
 import { InboxClient } from "./inbox-client";
 
@@ -42,31 +35,19 @@ export default async function InboxPage() {
   });
 
   try {
-    const [threads, storedClassifications, events, backfillComplete, snoozes, threadMeetings] =
-      await Promise.all([
-      fetchThreadsForTenant(tenant),
-      getClassificationsForUser(userId),
-      fetchEventsForTenant(tenant),
-      isBackfillComplete(userId),
-      getSnoozesForUser(userId),
-      getThreadMeetingsForUser(userId),
-    ]);
+    const backfillComplete = await isBackfillComplete(userId);
+    const { serialized, threads, classifications } = await loadInboxDataForUser(tenant, userId);
+    const snoozes = await getSnoozesForUser(userId);
 
     if (!backfillComplete) {
       triggerInboxBackfill(userId);
-    } else if (needsClassificationBoost(storedClassifications.length, threads.length)) {
+    } else if (needsClassificationBoost(classifications.length, threads.length)) {
       triggerInboxReclassify(userId);
     }
 
-    const meetingThreadIds = new Set(threadMeetings.map((meeting) => meeting.threadId));
-    const classifications = withDefaultClassifications(threads, storedClassifications, {
-      meetingThreadIds,
-    });
-    const data = serializeInboxData({ threads, classifications, events, threadMeetings });
-
     return (
       <InboxClient
-        initialData={data}
+        initialData={serialized}
         userId={userId}
         userEmail={userEmail}
         backfillComplete={backfillComplete}

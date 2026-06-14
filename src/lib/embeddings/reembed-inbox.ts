@@ -83,6 +83,7 @@ export async function runReembedInbox(userId: string, provider: AiProvider): Pro
   for (const row of rows) {
     try {
       const { vector, provider: usedProvider } = await embedWithProvider(
+        userId,
         provider,
         classificationEmbedText(row.subject, row.sender, row.snippet)
       );

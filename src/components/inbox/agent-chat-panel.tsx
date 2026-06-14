@@ -148,7 +148,11 @@ function ThinkingIndicator({ label }: { label: string }) {
   );
 }
 
-export function AgentChatPanel() {
+export function AgentChatPanel({
+  onOpenSettings,
+}: {
+  onOpenSettings?: () => void;
+} = {}) {
   const [input, setInput] = useState("");
   const [conversations, setConversations] = useState<AgentConversationItem[]>([]);
   const [openTabIds, setOpenTabIds] = useState<string[]>([]);
@@ -157,7 +161,7 @@ export function AgentChatPanel() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const { provider, setProvider } = useAiProvider();
+  const { provider, setProvider, availableProviders } = useAiProvider();
   const providerRef = useRef(provider);
   const conversationIdRef = useRef(conversationId);
   const lastUserTextRef = useRef<string | null>(null);
@@ -541,8 +545,13 @@ export function AgentChatPanel() {
           {statusLabel && <ThinkingIndicator label={statusLabel} />}
 
           {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error.message}
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive space-y-2">
+              <p>{error.message}</p>
+              {error.message.includes("Settings") && onOpenSettings && (
+                <Button size="sm" variant="outline" onClick={onOpenSettings}>
+                  Open AI settings
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -550,7 +559,12 @@ export function AgentChatPanel() {
 
       <div className="border-t border-hairline p-3 bg-canvas">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <AiProviderSelect value={provider} onChange={setProvider} disabled={isBusy} />
+          <AiProviderSelect
+            value={provider}
+            onChange={setProvider}
+            availableProviders={availableProviders}
+            disabled={isBusy}
+          />
         </div>
         <div className="flex items-center gap-2 rounded-full border border-hairline bg-canvas pl-4 pr-1 py-1 transition-colors focus-within:border-[color:var(--color-primary-focus)]/60">
           <input

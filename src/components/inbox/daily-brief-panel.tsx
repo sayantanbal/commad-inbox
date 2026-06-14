@@ -7,6 +7,7 @@ import { ActionChips } from "@/components/inbox/action-chips";
 import { streamDailyBriefApi } from "@/lib/inbox/client-api";
 import type { DailyBrief, SuggestedAction } from "@/lib/schemas/domain";
 import type { AiProvider } from "@/lib/ai/providers";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DailyBriefPanelProps {
@@ -14,6 +15,7 @@ interface DailyBriefPanelProps {
   provider: AiProvider;
   invalidationKey?: number;
   onAction: (action: SuggestedAction) => void;
+  onOpenSettings?: () => void;
 }
 
 export function DailyBriefPanel({
@@ -21,6 +23,7 @@ export function DailyBriefPanel({
   provider,
   invalidationKey = 0,
   onAction,
+  onOpenSettings,
 }: DailyBriefPanelProps) {
   const [brief, setBrief] = useState<DailyBrief | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,6 +138,11 @@ export function DailyBriefPanel({
         {error && !loading && (
           <div className="space-y-3">
             <p className="type-caption text-[color:var(--color-destructive)]">{error}</p>
+            {error.includes("Settings") && onOpenSettings && (
+              <Button variant="outline" size="sm" onClick={onOpenSettings}>
+                Open AI settings
+              </Button>
+            )}
             <button
               type="button"
               onClick={() => void load(true)}

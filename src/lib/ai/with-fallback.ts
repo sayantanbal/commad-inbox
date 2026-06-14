@@ -1,58 +1,71 @@
 import "server-only";
 
-import { getConfiguredProviders, isProviderConfigured } from "@/lib/ai/models";
+import { getAvailableProviders, resolveApiKey } from "@/lib/ai/key-store";
 import { DEFAULT_AI_PROVIDER, type AiProvider } from "@/lib/ai/providers";
 import { isRateLimitError } from "@/lib/ai/rate-limit";
+import { AiNotConfiguredError } from "@/lib/ai/runtime";
 
-export function getProviderChain(preferred: AiProvider): AiProvider[] {
+export async function getProviderChain(
+  userId: string,
+  preferred: AiProvider
+): Promise<AiProvider[]> {
   const fallback: AiProvider = preferred === "gemini" ? "openai" : "gemini";
   const chain: AiProvider[] = [];
 
-  if (isProviderConfigured(preferred)) {
+  if (await resolveApiKey(userId, preferred)) {
     chain.push(preferred);
   }
-  if (fallback !== preferred && isProviderConfigured(fallback) && !chain.includes(fallback)) {
+  if (
+    fallback !== preferred &&
+    (await resolveApiKey(userId, fallback)) &&
+    !chain.includes(fallback)
+  ) {
     chain.push(fallback);
   }
 
   return chain;
 }
 
-export function getDefaultProvider(): AiProvider {
-  const configured = getConfiguredProviders();
+export async function getDefaultProvider(userId: string): Promise<AiProvider> {
+  const configured = await getAvailableProviders(userId);
   if (configured.includes(DEFAULT_AI_PROVIDER)) {
     return DEFAULT_AI_PROVIDER;
   }
   return configured[0] ?? DEFAULT_AI_PROVIDER;
 }
 
-export function resolveAgentModelProvider(preferred: AiProvider): AiProvider {
-  const chain = getProviderChain(preferred);
+export async function resolveAgentModelProvider(
+  userId: string,
+  preferred: AiProvider
+): Promise<AiProvider> {
+  const chain = await getProviderChain(userId, preferred);
   return chain[0] ?? preferred;
 }
 
-export class NoAiProviderError extends Error {
+export class NoAiProviderError extends AiNotConfiguredError {
   constructor() {
-    super(
-      "No AI provider configured. Set GOOGLE_GENERATIVE_AI_API_KEY and/or OPENAI_API_KEY."
-    );
+    super();
     this.name = "NoAiProviderError";
   }
 }
 
 export async function withProviderFallback<T>(
+  userId: string,
   preferred: AiProvider,
-  fn: (provider: AiProvider) => Promise<T>
+  fn: (provider: AiProvider, apiKey: string) => Promise<T>
 ): Promise<{ result: T; provider: AiProvider }> {
-  const chain = getProviderChain(preferred);
+  const chain = await getProviderChain(userId, preferred);
   if (chain.length === 0) {
     throw new NoAiProviderError();
   }
 
   let lastError: unknown;
   for (const provider of chain) {
+    const apiKey = await resolveApiKey(userId, provider);
+    if (!apiKey) continue;
+
     try {
-      const result = await fn(provider);
+      const result = await fn(provider, apiKey);
       return { result, provider };
     } catch (error) {
       lastError = error;

@@ -30,7 +30,7 @@ export async function classifyThreadForUser(
 
   const sender =
     thread.participants[0]?.name ?? thread.participants[0]?.email ?? "Unknown";
-  const result = await classifyThread({
+  const result = await classifyThread(userId, {
     subject: thread.subject,
     sender,
     snippet: thread.snippet,
@@ -103,8 +103,10 @@ async function embedClassificationAsync(
   snippet: string
 ): Promise<void> {
   try {
+    const preferred = await getDefaultProvider(userId);
     const { vector, provider } = await embedWithProvider(
-      getDefaultProvider(),
+      userId,
+      preferred,
       classificationEmbedText(subject, sender, snippet)
     );
     await storeClassificationEmbedding(userId, threadId, vector, provider);
