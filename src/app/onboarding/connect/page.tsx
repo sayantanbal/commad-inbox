@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ArrowRight, CalendarRange, Check, Mail, ShieldCheck } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { isTenantFullyConnected } from "@/lib/corsair/connection";
+import { getOnboardingRedirectPath } from "@/lib/onboarding/status";
 import { Button } from "@/components/ui/button";
 
 interface ConnectPageProps {
@@ -20,7 +21,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
   }
 
   if (await isTenantFullyConnected(session.user.id)) {
-    redirect("/inbox");
+    redirect(await getOnboardingRedirectPath(session.user.id));
   }
 
   const params = await searchParams;

@@ -14,6 +14,7 @@ import { requireConnectedTenant } from "@/lib/corsair/tenant";
 import { getSnoozesForUser } from "@/lib/inbox/snoozes";
 import { loadInboxDataForUser } from "@/lib/inbox/load-inbox-data";
 import { renewWatchesIfNeeded } from "@/lib/webhooks/renew-watches";
+import { getOnboardingRedirectPath } from "@/lib/onboarding/status";
 import { InboxClient } from "./inbox-client";
 
 function isAuthError(error: unknown): boolean {
@@ -29,6 +30,11 @@ function isAuthError(error: unknown): boolean {
 
 export default async function InboxPage() {
   const { tenant, userId, userEmail } = await requireConnectedTenant();
+
+  const onboardingPath = await getOnboardingRedirectPath(userId);
+  if (onboardingPath !== "/inbox") {
+    redirect(onboardingPath);
+  }
 
   void renewWatchesIfNeeded(userId).catch((error) => {
     console.error("[inbox] watch renewal failed", error);

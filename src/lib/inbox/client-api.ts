@@ -443,11 +443,75 @@ export async function fetchContactsApi() {
       id: string;
       email: string;
       displayName: string;
-      lastContactAt: string;
+      source: string;
+      lastContactAt: string | null;
+      avgResponseHours: number | null;
       warmth: string;
       openCommitmentCount: number;
       emailCount30d: number;
+      isAppContact: boolean;
     }>;
+  }>;
+}
+
+export async function addContactApi(input: {
+  email: string;
+  displayName?: string;
+}) {
+  const response = await fetch("/api/inbox/contacts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ id: string; created: boolean }>;
+}
+
+export async function dismissContactApi(email: string) {
+  const response = await fetch("/api/inbox/contacts/dismiss", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ success: boolean }>;
+}
+
+export async function fetchFreeBusyApi(emails: string[], start: Date, end: Date) {
+  const params = new URLSearchParams({
+    emails: emails.join(","),
+    start: start.toISOString(),
+    end: end.toISOString(),
+  });
+  const response = await fetch(`/api/inbox/free-busy?${params}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    busy: Record<string, Array<{ start: string; end: string }>>;
+  }>;
+}
+
+export async function rescheduleCalendarEventApi(input: {
+  eventId: string;
+  slotStart: Date;
+  durationMinutes?: number;
+}) {
+  const response = await fetch("/api/inbox/calendar-event", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      eventId: input.eventId,
+      slotStart: input.slotStart.toISOString(),
+      durationMinutes: input.durationMinutes,
+    }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    eventId: string;
+    start: string;
+    end: string;
+    durationMinutes: number;
+    hangoutLink?: string;
+    htmlLink?: string;
   }>;
 }
 

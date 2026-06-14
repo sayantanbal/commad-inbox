@@ -7,6 +7,7 @@ import { getDefaultProvider } from "@/lib/ai/with-fallback";
 import type { CorsairInstance } from "@/lib/corsair";
 import { mapGmailThread } from "@/lib/corsair/gmail-parse";
 import { getCommitmentsForUser } from "@/lib/commitments/queries";
+import { listAppContactsForUser } from "@/lib/contacts/app-contacts";
 import { db } from "@/lib/db";
 import { contacts, meetingBriefs } from "@/lib/db/schema";
 import { meetingBriefStoredSchema, type MeetingBriefStored } from "@/lib/schemas/domain";
@@ -134,6 +135,11 @@ export async function rebuildContactsForUser(
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 50);
 
+  const appRows = await listAppContactsForUser(userId);
+  const appNameByEmail = new Map(
+    appRows.map((row) => [row.email.toLowerCase(), row.displayName ?? row.email.split("@")[0]])
+  );
+
   await db.delete(contacts).where(eq(contacts.userId, userId));
 
   const openCommitments = await getCommitmentsForUser(userId, { status: ["open"] });
@@ -154,7 +160,7 @@ export async function rebuildContactsForUser(
       id: `${userId}:${email}`,
       userId,
       email,
-      displayName: data.name,
+      displayName: appNameByEmail.get(email) ?? data.name,
       lastContactAt: data.lastAt,
       emailCount30d: data.count,
       warmth,

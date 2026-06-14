@@ -4,7 +4,12 @@ import { addMinutes, format } from "date-fns";
 import { AlertCircle, Calendar, Clock, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { findNearestFreeSlot, isSlotBusy } from "@/lib/calendar/free-slots";
+import {
+  findNearestFreeSlot,
+  isSlotBusy,
+  isSlotBusyForAttendees,
+  type BusyInterval,
+} from "@/lib/calendar/free-slots";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent } from "@/lib/types";
 import type { SchedulingIntent } from "@/lib/types";
@@ -16,8 +21,12 @@ interface InlineAvailabilityPickerProps {
   freeSlots: Date[];
   calendarEvents: CalendarEvent[];
   durationMinutes: number;
+  previousSlotStart?: Date | null;
   excludeEventId?: string;
   attendees: string[];
+  attendeeBusy?: BusyInterval[];
+  onDurationChange?: (minutes: 30 | 45 | 60) => void;
+  onCustomTime?: () => void;
   onClose: () => void;
   onSelectSlot: (slot: Date) => void;
 }
@@ -29,8 +38,12 @@ export function InlineAvailabilityPicker({
   freeSlots,
   calendarEvents,
   durationMinutes,
+  previousSlotStart,
   excludeEventId,
   attendees,
+  attendeeBusy = [],
+  onDurationChange,
+  onCustomTime,
   onClose,
   onSelectSlot,
 }: InlineAvailabilityPickerProps) {
@@ -43,7 +56,7 @@ export function InlineAvailabilityPicker({
     () => schedulingIntent?.proposedTimes ?? [],
     [schedulingIntent?.proposedTimes]
   );
-  const duration = schedulingIntent?.duration ?? durationMinutes;
+  const duration = durationMinutes;
 
   const slotOptions = useMemo(() => {
     const proposedKeys = new Set(proposedSlots.map((slot) => slot.toISOString()));
@@ -61,20 +74,30 @@ export function InlineAvailabilityPicker({
     }
   }, [open, slotOptions.length]);
 
+  const slotIsBusy = (slot: Date, end: Date) =>
+    isSlotBusy(calendarEvents, slot, end, excludeEventId) ||
+    isSlotBusyForAttendees(attendeeBusy, slot, end);
+
   const handleSlotSelect = (slot: Date) => {
     const end = addMinutes(slot, duration);
-    if (isSlotBusy(calendarEvents, slot, end, excludeEventId)) {
-      const alternative = findNearestFreeSlot(calendarEvents, duration, slot, excludeEventId);
-      if (alternative) {
+    if (slotIsBusy(slot, end)) {
+      const alternative = findNearestFreeSlot(calendarEvents, duration, slot, {
+        excludeEventId,
+      });
+      if (alternative && !slotIsBusy(alternative, addMinutes(alternative, duration))) {
         setConflictHint(
-          `${format(slot, "EEE h:mm a")} conflicts with another event — nearest free slot is ${format(alternative, "EEE h:mm a")}.`
+          `${format(slot, "EEE h:mm a")} conflicts — nearest free slot is ${format(alternative, "EEE h:mm a")}.`
         );
-        const altIndex = slotOptions.findIndex((option) => option.toISOString() === alternative.toISOString());
+        const altIndex = slotOptions.findIndex(
+          (option) => option.toISOString() === alternative.toISOString()
+        );
         if (altIndex >= 0) setHighlightIndex(altIndex);
         onSelectSlot(alternative);
         return;
       }
-      setConflictHint(`${format(slot, "EEE h:mm a")} is busy and no nearby slot was found. Pick another time.`);
+      setConflictHint(
+        `${format(slot, "EEE h:mm a")} is busy and no nearby slot was found. Pick another time.`
+      );
       return;
     }
     setConflictHint(null);
@@ -150,21 +173,33 @@ export function InlineAvailabilityPicker({
         </button>
       </div>
 
-      {/* Duration chips (read-only display of effective duration) */}
-      <div className="mb-4 flex items-center gap-2">
-        {[30, 45, 60].map((d) => (
-          <span
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {([30, 45, 60] as const).map((d) => (
+          <button
             key={d}
+            type="button"
+            onClick={() => onDurationChange?.(d)}
             className="chip-option"
             data-selected={duration === d ? "true" : "false"}
           >
             {d} min
-          </span>
+          </button>
         ))}
+        {onCustomTime && (
+          <button type="button" onClick={onCustomTime} className="btn-pearl-capsule">
+            Custom time…
+          </button>
+        )}
         <span className="type-caption text-ink-muted-48 ml-2">
           ↑↓ navigate · ↵ confirm · Esc close
         </span>
       </div>
+
+      {mode === "reschedule" && previousSlotStart && (
+        <div className="mb-4 rounded-[8px] border-2 border-[color:var(--color-success)] bg-[rgba(52,199,89,0.08)] px-3 py-2 type-caption text-ink">
+          Previous time: {format(previousSlotStart, "EEE, MMM d · h:mm a")}
+        </div>
+      )}
 
       {conflictHint && (
         <div className="mb-4 flex items-start gap-2 rounded-[8px] border border-[color:var(--color-warning)]/30 bg-[#fff7e6] px-3 py-2 type-caption text-[color:var(--color-warning)]">
@@ -195,7 +230,7 @@ export function InlineAvailabilityPicker({
           <div className="flex flex-wrap gap-2">
             {proposedSlots.map((slot) => {
               const end = addMinutes(slot, duration);
-              const busy = isSlotBusy(calendarEvents, slot, end, excludeEventId);
+              const busy = slotIsBusy(slot, end);
               const index = slotOptions.findIndex(
                 (option) => option.toISOString() === slot.toISOString()
               );
@@ -233,7 +268,7 @@ export function InlineAvailabilityPicker({
           <div className="grid gap-1.5 sm:grid-cols-2">
             {slotOptions.map((slot, index) => {
               const end = addMinutes(slot, duration);
-              const busy = isSlotBusy(calendarEvents, slot, end, excludeEventId);
+              const busy = slotIsBusy(slot, end);
               const fromEmail = proposedSlots.some(
                 (proposed) => proposed.toISOString() === slot.toISOString()
               );

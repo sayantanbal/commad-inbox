@@ -18,12 +18,13 @@ import { cn } from "@/lib/utils";
 import { KbdBadge } from "@/components/ui/kbd-badge";
 
 export type PrimaryView = "brief" | "inbox" | "calendar";
+export type WorkspacePanel = "welcome" | "inbox" | "calendar" | "brief";
 export type MailboxView = "inbox" | "sent" | "snoozed" | "archive";
 
 interface PrimaryNavProps {
-  active: PrimaryView;
+  workspace: WorkspacePanel;
   mailboxView?: MailboxView;
-  onChange: (view: PrimaryView) => void;
+  onWorkspaceChange: (view: WorkspacePanel) => void;
   onMailboxView?: (view: MailboxView) => void;
   inboxCount?: number;
   commitmentsOpen?: boolean;
@@ -54,9 +55,9 @@ type NavRow =
     };
 
 export function PrimaryNav({
-  active,
+  workspace,
   mailboxView = "inbox",
-  onChange,
+  onWorkspaceChange,
   onMailboxView,
   inboxCount,
   commitmentsOpen = false,
@@ -74,10 +75,10 @@ export function PrimaryNav({
       icon: Inbox,
       keys: ["G", "I"],
       onSelect: () => {
-        onChange("inbox");
+        onWorkspaceChange("inbox");
         onMailboxView?.("inbox");
       },
-      isActive: active === "inbox" && mailboxView === "inbox" && !commitmentsOpen,
+      isActive: workspace === "inbox" && mailboxView === "inbox" && !commitmentsOpen,
       badge: inboxCount,
     },
     {
@@ -86,10 +87,10 @@ export function PrimaryNav({
       label: "Sent",
       icon: Send,
       onSelect: () => {
-        onChange("inbox");
+        onWorkspaceChange("inbox");
         onMailboxView?.("sent");
       },
-      isActive: active === "inbox" && mailboxView === "sent" && !commitmentsOpen,
+      isActive: workspace === "inbox" && mailboxView === "sent" && !commitmentsOpen,
     },
     {
       kind: "item",
@@ -98,10 +99,10 @@ export function PrimaryNav({
       icon: Clock,
       keys: ["G", "S"],
       onSelect: () => {
-        onChange("inbox");
+        onWorkspaceChange("inbox");
         onMailboxView?.("snoozed");
       },
-      isActive: active === "inbox" && mailboxView === "snoozed" && !commitmentsOpen,
+      isActive: workspace === "inbox" && mailboxView === "snoozed" && !commitmentsOpen,
     },
     {
       kind: "item",
@@ -109,10 +110,10 @@ export function PrimaryNav({
       label: "Archive",
       icon: Archive,
       onSelect: () => {
-        onChange("inbox");
+        onWorkspaceChange("inbox");
         onMailboxView?.("archive");
       },
-      isActive: active === "inbox" && mailboxView === "archive" && !commitmentsOpen,
+      isActive: workspace === "inbox" && mailboxView === "archive" && !commitmentsOpen,
     },
     {
       kind: "item",
@@ -120,8 +121,8 @@ export function PrimaryNav({
       label: "Calendar",
       icon: CalendarRange,
       keys: ["G", "C"],
-      onSelect: () => onChange("calendar"),
-      isActive: active === "calendar",
+      onSelect: () => onWorkspaceChange("calendar"),
+      isActive: workspace === "calendar",
     },
   ];
 
@@ -151,8 +152,8 @@ export function PrimaryNav({
       label: "Daily Brief",
       icon: Sun,
       keys: ["G", "B"],
-      onSelect: () => onChange("brief"),
-      isActive: active === "brief",
+      onSelect: () => onWorkspaceChange("brief"),
+      isActive: workspace === "brief",
     },
   ];
 

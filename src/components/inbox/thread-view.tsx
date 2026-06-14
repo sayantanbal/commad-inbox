@@ -31,6 +31,7 @@ interface ThreadViewProps {
   meetingDuration: number;
   excludeEventId?: string;
   meetingAttendees: string[];
+  attendeeBusy?: import("@/lib/calendar/free-slots").BusyInterval[];
   onReply: () => void;
   onArchive: () => void;
   onSchedule: () => void;
@@ -46,6 +47,9 @@ interface ThreadViewProps {
   onDismissCommitment?: (id: string) => void;
   onPreBrief?: () => void;
   preBriefSlot?: React.ReactNode;
+  onDurationChange?: (minutes: 30 | 45 | 60) => void;
+  previousSlotStart?: Date | null;
+  onCustomScheduleTime?: () => void;
 }
 
 function ShortcutButton({
@@ -87,6 +91,7 @@ export function ThreadView({
   meetingDuration,
   excludeEventId,
   meetingAttendees,
+  attendeeBusy,
   onReply,
   onArchive,
   onSchedule,
@@ -102,6 +107,9 @@ export function ThreadView({
   onDismissCommitment,
   onPreBrief,
   preBriefSlot,
+  onDurationChange,
+  previousSlotStart,
+  onCustomScheduleTime,
 }: ThreadViewProps) {
   if (!thread) {
     return (
@@ -182,8 +190,12 @@ export function ThreadView({
         freeSlots={freeSlots}
         calendarEvents={calendarEvents}
         durationMinutes={meetingDuration}
+        previousSlotStart={previousSlotStart}
         excludeEventId={excludeEventId}
         attendees={meetingAttendees}
+        attendeeBusy={attendeeBusy}
+        onDurationChange={onDurationChange}
+        onCustomTime={onCustomScheduleTime}
         onClose={onCloseAvailability}
         onSelectSlot={onSelectSlot}
       />

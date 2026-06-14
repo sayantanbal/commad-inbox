@@ -10,6 +10,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   vector,
 } from "drizzle-orm/pg-core";
 
@@ -42,6 +43,7 @@ import type {
   SuggestedAction,
 } from "@/lib/schemas/domain";
 import { EMBEDDING_DIMENSIONS } from "@/lib/ai/providers";
+import type { WorkingDaysStructured } from "@/lib/preferences/sanitize-working-days";
 
 export type SchedulingIntent = SchedulingIntentStored;
 
@@ -258,6 +260,38 @@ export const contacts = pgTable(
   ]
 );
 
+export const appContacts = pgTable(
+  "app_contacts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    displayName: text("display_name"),
+    source: text("source").notNull().default("manual"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("app_contacts_user_email_idx").on(table.userId, table.email),
+    index("app_contacts_user_idx").on(table.userId),
+  ]
+);
+
+export const contactDismissals = pgTable(
+  "contact_dismissals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("contact_dismissals_user_email_idx").on(table.userId, table.email)]
+);
+
 export const emailSnippets = pgTable(
   "email_snippets",
   {
@@ -284,6 +318,10 @@ export const userPreferences = pgTable("user_preferences", {
     .default("I check email at 9am, 1pm, and 5pm. I'll get back to you soon."),
   followUpDaysDefault: integer("follow_up_days_default").notNull().default(5),
   timezone: text("timezone").notNull().default("UTC"),
+  workingDaysStructured: json("working_days_structured").$type<WorkingDaysStructured | null>(),
+  workingDaysTextOverride: text("working_days_text_override"),
+  workingDaysSource: text("working_days_source").$type<"wizard" | "override">().default("wizard"),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -384,6 +422,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   dailyBriefs: many(dailyBriefs),
   commitments: many(commitments),
   contacts: many(contacts),
+  appContacts: many(appContacts),
+  contactDismissals: many(contactDismissals),
   emailSnippets: many(emailSnippets),
   preferences: one(userPreferences),
   aiKeys: many(userAiKeys),

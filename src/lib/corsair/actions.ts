@@ -30,6 +30,8 @@ export async function sendGmailMessage(
   params: {
     from: string;
     to: string[];
+    cc?: string[];
+    bcc?: string[];
     subject: string;
     bodyHtml: string;
     threadId?: string;

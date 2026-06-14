@@ -39,8 +39,9 @@ export function useInboxRealtime(
       channel.bind("inbox-changed", handler);
     }
 
-    const pollMs = PUSHER_KEY && PUSHER_CLUSTER ? 30_000 : 5_000;
+    const pollMs = PUSHER_KEY && PUSHER_CLUSTER ? 60_000 : 15_000;
     const poll = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       onPollRef.current?.();
     }, pollMs);
 

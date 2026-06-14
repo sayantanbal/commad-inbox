@@ -2,19 +2,54 @@
 
 import { format } from "date-fns";
 import { Clock } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { getSnoozePresets } from "@/lib/activity";
 
 interface SnoozePickerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   threadSubject?: string;
+  timezone?: string;
   onSnooze: (until: Date, label: string) => void;
 }
 
-export function SnoozePicker({ open, onOpenChange, threadSubject, onSnooze }: SnoozePickerProps) {
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function SnoozePicker({
+  open,
+  onOpenChange,
+  threadSubject,
+  onSnooze,
+}: SnoozePickerProps) {
   const presets = getSnoozePresets();
+  const defaultCustom = useMemo(() => {
+    const d = new Date(Date.now() + 3_600_000);
+    d.setSeconds(0, 0);
+    return toDatetimeLocalValue(d);
+  }, [open]);
+  const [customValue, setCustomValue] = useState(defaultCustom);
+  const [customError, setCustomError] = useState<string | null>(null);
+
+  const applyCustom = () => {
+    const until = new Date(customValue);
+    if (Number.isNaN(until.getTime())) {
+      setCustomError("Enter a valid date and time.");
+      return;
+    }
+    if (until.getTime() <= Date.now()) {
+      setCustomError("Pick a time in the future.");
+      return;
+    }
+    setCustomError(null);
+    onSnooze(until, `Custom · ${format(until, "MMM d · h:mm a")}`);
+    onOpenChange(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -28,9 +63,7 @@ export function SnoozePicker({ open, onOpenChange, threadSubject, onSnooze }: Sn
 
         <div className="p-4 space-y-4">
           {threadSubject && (
-            <p className="truncate type-caption text-ink-muted-48">
-              {threadSubject}
-            </p>
+            <p className="truncate type-caption text-ink-muted-48">{threadSubject}</p>
           )}
 
           <div className="space-y-1">
@@ -52,9 +85,24 @@ export function SnoozePicker({ open, onOpenChange, threadSubject, onSnooze }: Sn
             ))}
           </div>
 
-          <Button variant="outline" size="sm" className="w-full" disabled>
-            Custom time (coming soon)
-          </Button>
+          <div className="space-y-2 rounded-[8px] border border-hairline p-3">
+            <p className="type-caption-strong text-ink">Custom time</p>
+            <Input
+              type="datetime-local"
+              value={customValue}
+              onChange={(e) => {
+                setCustomValue(e.target.value);
+                setCustomError(null);
+              }}
+              className="type-caption"
+            />
+            {customError && (
+              <p className="type-fine text-[color:var(--color-destructive)]">{customError}</p>
+            )}
+            <Button size="sm" className="w-full" onClick={applyCustom}>
+              Snooze until custom time
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

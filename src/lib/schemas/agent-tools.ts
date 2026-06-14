@@ -1,15 +1,52 @@
 import { z } from "zod";
 import { threadIdField } from "@/lib/schemas/domain";
 
+const emailOrList = z.union([
+  z.string().email({ message: "must be a valid email address" }),
+  z.array(z.string().email()).min(1),
+]);
+
 export const sendEmailToolInputSchema = z
   .object({
-    to: z.union([
-      z.string().email({ message: "to must be a valid email address" }),
-      z.array(z.string().email()).min(1, { message: "to must include at least one email" }),
-    ]),
+    to: emailOrList,
+    cc: emailOrList.optional(),
+    bcc: emailOrList.optional(),
     subject: z.string().min(1, "subject is required"),
     body: z.string().min(1, "body is required"),
     threadId: threadIdField.optional(),
+  })
+  .strict();
+
+export const scheduleSendToolInputSchema = z
+  .object({
+    to: emailOrList,
+    cc: emailOrList.optional(),
+    bcc: emailOrList.optional(),
+    subject: z.string().min(1),
+    body: z.string().min(1),
+    sendAt: z.string().datetime({ message: "sendAt must be ISO 8601 datetime" }),
+    threadId: threadIdField.optional(),
+  })
+  .strict();
+
+export const listCalendarEventsToolInputSchema = z
+  .object({
+    start: z.string().datetime(),
+    end: z.string().datetime(),
+  })
+  .strict();
+
+export const rescheduleCalendarEventToolInputSchema = z
+  .object({
+    eventId: z.string().min(1),
+    start: z.string().datetime(),
+    durationMinutes: z.number().int().min(15).max(240).default(30),
+  })
+  .strict();
+
+export const cancelCalendarEventToolInputSchema = z
+  .object({
+    eventId: z.string().min(1),
   })
   .strict();
 

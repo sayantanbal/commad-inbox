@@ -1,17 +1,21 @@
 "use client";
 
 import {
-  addDays,
   addMonths,
-  addWeeks,
   format,
   isSameDay,
   isSameMonth,
   startOfMonth,
-  startOfWeek,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  CalendarDayGrid,
+  eventOccursOnDay,
+  eventTypeClasses,
+  getEventSpanDayKeys,
+  getEventVisualType,
+} from "@/components/inbox/calendar-day-grid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,14 +25,16 @@ import type { CalendarEvent } from "@/lib/types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type CalendarViewMode = "month" | "day";
-
 interface CalendarPanelProps {
   events: CalendarEvent[];
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   onDefrag?: () => void;
   onMonthChange?: (month: Date) => void;
+  threadMeetingEventIds?: Set<string>;
+  focusBlockEventIds?: Set<string>;
+  onEventClick?: (event: CalendarEvent) => void;
+  onOpenPreBrief?: (attendeeEmail: string) => void;
 }
 
 export function CalendarPanel({
@@ -37,11 +43,14 @@ export function CalendarPanel({
   onSearchChange,
   onDefrag,
   onMonthChange,
+  threadMeetingEventIds,
+  focusBlockEventIds,
+  onEventClick,
+  onOpenPreBrief,
 }: CalendarPanelProps) {
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
-  const [selectedDay, setSelectedDay] = useState(() => new Date());
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null);
   const today = new Date();
 
   useEffect(() => {
@@ -49,30 +58,43 @@ export function CalendarPanel({
   }, [currentMonth, onMonthChange]);
 
   const days = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
-  const weekDays = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart]
-  );
 
   const filteredEvents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return events;
     return events.filter(
-      (e) =>
-        e.summary.toLowerCase().includes(q) ||
-        e.attendees.some(
-          (a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q)
+      (event) =>
+        event.summary.toLowerCase().includes(q) ||
+        event.attendees.some(
+          (attendee) =>
+            attendee.name.toLowerCase().includes(q) || attendee.email.toLowerCase().includes(q)
         )
     );
   }, [events, searchQuery]);
 
+  const monthEvents = useMemo(
+    () =>
+      filteredEvents
+        .filter((event) => isSameMonth(event.start, currentMonth))
+        .sort((a, b) => a.start.getTime() - b.start.getTime()),
+    [filteredEvents, currentMonth]
+  );
+
+  const highlightedDayKeys = useMemo(() => {
+    if (!highlightedEventId) return new Set<string>();
+    const event = filteredEvents.find((item) => item.id === highlightedEventId);
+    if (!event) return new Set<string>();
+    return new Set(getEventSpanDayKeys(event));
+  }, [filteredEvents, highlightedEventId]);
+
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     filteredEvents.forEach((event) => {
-      const key = format(event.start, "yyyy-MM-dd");
-      const list = map.get(key) ?? [];
-      list.push(event);
-      map.set(key, list);
+      getEventSpanDayKeys(event).forEach((key) => {
+        const list = map.get(key) ?? [];
+        list.push(event);
+        map.set(key, list);
+      });
     });
     return map;
   }, [filteredEvents]);
@@ -81,236 +103,250 @@ export function CalendarPanel({
     const now = new Date();
     setCurrentMonth(startOfMonth(now));
     setSelectedDay(now);
-    setWeekStart(startOfWeek(now, { weekStartsOn: 0 }));
+    setHighlightedEventId(null);
   };
 
   const selectDay = (date: Date) => {
     setSelectedDay(date);
-    setCurrentMonth(startOfMonth(date));
-    setWeekStart(startOfWeek(date, { weekStartsOn: 0 }));
+    if (!isSameMonth(date, currentMonth)) {
+      setCurrentMonth(startOfMonth(date));
+    }
   };
 
+  const handleEventSelect = (event: CalendarEvent) => {
+    setHighlightedEventId(event.id);
+    setSelectedDay(event.start);
+    if (!isSameMonth(event.start, currentMonth)) {
+      setCurrentMonth(startOfMonth(event.start));
+    }
+    onEventClick?.(event);
+  };
+
+  const selectedDayEvents = useMemo(() => {
+    if (!selectedDay) return [];
+    return filteredEvents
+      .filter((event) => eventOccursOnDay(event, selectedDay))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+  }, [filteredEvents, selectedDay]);
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border px-3 py-2.5">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-canvas">
+      <div className="shrink-0 border-b border-hairline px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] lowercase tracking-wide text-muted-foreground">calendar</p>
-            <p className="truncate text-base font-semibold leading-tight">
-              {viewMode === "month"
-                ? format(currentMonth, "MMMM yyyy")
-                : `${format(weekStart, "MMM d")} – ${format(addDays(weekStart, 6), "MMM d, yyyy")}`}
+            <p className="type-fine text-ink-muted-48 lowercase" style={{ letterSpacing: "0.04em" }}>
+              calendar
+            </p>
+            <p className="truncate text-base font-semibold leading-tight text-ink">
+              {format(currentMonth, "MMMM yyyy")}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <div className="flex rounded-full border border-border bg-secondary/40 p-0.5 text-[10px]">
-              <button
-                type="button"
-                onClick={() => setViewMode("month")}
-                className={cn(
-                  "rounded-full px-2.5 py-1 font-medium transition-colors",
-                  viewMode === "month"
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Month
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("day")}
-                className={cn(
-                  "rounded-full px-2.5 py-1 font-medium transition-colors",
-                  viewMode === "day"
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Day
-              </button>
-            </div>
-            <div className="flex items-center gap-0.5">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full"
-                onClick={() => {
-                  if (viewMode === "month") {
-                    setCurrentMonth((m) => addMonths(m, -1));
-                  } else {
-                    setWeekStart((w) => addWeeks(w, -1));
-                  }
-                }}
-                aria-label={viewMode === "month" ? "Previous month" : "Previous week"}
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 rounded-full px-2.5 text-[10px] font-medium"
-                onClick={goToToday}
-              >
-                Today
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full"
-                onClick={() => {
-                  if (viewMode === "month") {
-                    setCurrentMonth((m) => addMonths(m, 1));
-                  } else {
-                    setWeekStart((w) => addWeeks(w, 1));
-                  }
-                }}
-                aria-label={viewMode === "month" ? "Next month" : "Next week"}
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-full"
+              onClick={() => setCurrentMonth((month) => addMonths(month, -1))}
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 rounded-full px-2.5 type-caption font-semibold"
+              onClick={goToToday}
+            >
+              Today
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-full"
+              onClick={() => setCurrentMonth((month) => addMonths(month, 1))}
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       </div>
 
       {onSearchChange && (
-        <div className="shrink-0 border-b border-border px-3 py-2">
+        <div className="shrink-0 border-b border-hairline px-3 py-2">
           <Input
             value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Filter events…"
-            className="h-8 border-border/60 bg-secondary/30 text-xs"
+            className="h-8 border-hairline bg-pearl/60 type-caption"
           />
         </div>
       )}
 
-      {viewMode === "month" ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="grid shrink-0 grid-cols-7 border-b border-border/60 px-1.5 py-1.5 text-center text-[9px] font-semibold uppercase tracking-wider">
-            {WEEKDAYS.map((label, i) => (
-              <span
-                key={label}
-                className={cn(i === 0 || i === 6 ? "text-muted-foreground/70" : "text-muted-foreground")}
-              >
-                {label}
-              </span>
-            ))}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="flex min-h-0 min-w-0 flex-col border-r border-hairline">
+          <div className="shrink-0 border-b border-hairline px-3 py-2">
+            <p className="type-caption-strong text-ink uppercase" style={{ letterSpacing: "0.06em" }}>
+              Events
+            </p>
+            <p className="type-fine text-ink-muted-48">
+              {monthEvents.length} in {format(currentMonth, "MMMM")}
+            </p>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px p-1.5">
-            {days.map((day) => {
-              const key = format(day.date, "yyyy-MM-dd");
-              const dayEvents = eventsByDay.get(key) ?? [];
-              const isToday = isSameDay(day.date, today);
-              const isSelected = isSameDay(day.date, selectedDay);
-              const inMonth = isSameMonth(day.date, currentMonth);
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-1 p-2">
+              {monthEvents.length === 0 ? (
+                <p className="px-1 py-4 type-caption text-ink-muted-48">
+                  {searchQuery.trim() ? "No matching events" : "No events this month"}
+                </p>
+              ) : (
+                monthEvents.map((event) => {
+                  const type = getEventVisualType(event, focusBlockEventIds, threadMeetingEventIds);
+                  const styles = eventTypeClasses(type);
+                  const isHighlighted = highlightedEventId === event.id;
+                  const isSelectedDay = selectedDay ? eventOccursOnDay(event, selectedDay) : false;
 
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => selectDay(day.date)}
-                  className={cn(
-                    "flex min-h-0 flex-col items-center justify-center rounded-sm px-0.5 py-0.5 text-[10px] leading-none transition-colors",
-                    !inMonth && "text-muted-foreground/35",
-                    inMonth && day.isWeekend && "text-muted-foreground",
-                    inMonth && !day.isWeekend && "text-foreground",
-                    isSelected && "bg-primary/15 ring-1 ring-primary/40",
-                    isToday && !isSelected && "bg-primary/8 ring-1 ring-primary/25",
-                    !isSelected && !isToday && "hover:bg-accent"
-                  )}
-                >
-                  <span className={cn("font-semibold", isToday && "text-primary")}>
-                    {day.dayOfMonth}
-                  </span>
-                  {dayEvents.length > 0 && (
-                    <span className="mt-0.5 flex items-center gap-px">
-                      {dayEvents.length <= 2 ? (
-                        dayEvents.map((e) => (
-                          <span
-                            key={e.id}
-                            className={cn(
-                              "h-1 w-1 rounded-full",
-                              e.status === "tentative" ? "bg-amber-500" : "bg-foreground/60"
-                            )}
-                          />
-                        ))
-                      ) : (
-                        <span className="text-[8px] text-muted-foreground">··</span>
-                      )}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {weekDays.map((day) => {
-              const key = format(day, "yyyy-MM-dd");
-              const dayEvents = eventsByDay.get(key) ?? [];
-              const isToday = isSameDay(day, today);
-              const isSelected = isSameDay(day, selectedDay);
-
-              return (
-                <div
-                  key={key}
-                  className={cn(
-                    "rounded-md border px-2 py-2 transition-colors",
-                    isSelected
-                      ? "border-primary/40 bg-primary/10"
-                      : "border-transparent hover:border-border/60 hover:bg-accent/30"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDay(day)}
-                    className="mb-1.5 flex w-full items-baseline justify-between text-left"
-                  >
-                    <span
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => handleEventSelect(event)}
                       className={cn(
-                        "text-xs font-medium",
-                        isToday ? "text-primary" : "text-muted-foreground"
+                        "w-full rounded-[8px] border px-2.5 py-2 text-left transition-colors",
+                        styles.bg,
+                        styles.border,
+                        isHighlighted && "ring-1 ring-primary/50",
+                        isSelectedDay && !isHighlighted && "border-primary/30"
                       )}
                     >
-                      {format(day, "EEE d")}
-                    </span>
-                    {isToday && (
-                      <span className="text-[10px] uppercase tracking-wide text-primary">Today</span>
-                    )}
-                  </button>
-                  {dayEvents.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground/60">
-                      {searchQuery.trim() ? "No matching events" : "Free"}
-                    </p>
-                  ) : (
-                    <div className="space-y-1">
-                      {dayEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="rounded border border-border/60 bg-secondary/50 px-2 py-1.5"
-                        >
-                          <p className="truncate text-xs font-medium">{event.summary}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {format(event.start, "h:mm a")}
+                      <div className="flex items-start gap-2">
+                        <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", styles.dot)} />
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate type-caption font-semibold", styles.text)}>
+                            {event.summary}
+                          </p>
+                          <p className="type-fine text-ink-muted-48">
+                            {format(event.start, "EEE d · h:mm a")}
                             {event.attendees.length > 0 && ` · ${event.attendees.length} attendees`}
                           </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+          {selectedDay ? (
+            <>
+              <div className="flex shrink-0 items-center justify-between border-b border-hairline px-2 py-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 type-caption"
+                  onClick={() => setSelectedDay(null)}
+                >
+                  ← Month
+                </Button>
+                <span className="type-fine text-ink-muted-48">
+                  {selectedDayEvents.length} event{selectedDayEvents.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <CalendarDayGrid
+                date={selectedDay}
+                events={filteredEvents}
+                focusBlockEventIds={focusBlockEventIds}
+                threadMeetingEventIds={threadMeetingEventIds}
+                highlightedEventId={highlightedEventId}
+                onEventClick={handleEventSelect}
+                onOpenPreBrief={onOpenPreBrief}
+              />
+            </>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="grid shrink-0 grid-cols-7 border-b border-hairline px-1 py-1.5 text-center">
+                {WEEKDAYS.map((label, index) => (
+                  <span
+                    key={label}
+                    className={cn(
+                      "type-fine uppercase",
+                      index === 0 || index === 6 ? "text-ink-muted-48" : "text-ink-muted-80"
+                    )}
+                    style={{ letterSpacing: "0.08em" }}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+
+              <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-hairline p-px">
+                {days.map((day) => {
+                  const key = format(day.date, "yyyy-MM-dd");
+                  const dayEvents = eventsByDay.get(key) ?? [];
+                  const isToday = isSameDay(day.date, today);
+                  const isHighlightedDay = highlightedDayKeys.has(key);
+                  const inMonth = day.isCurrentMonth;
+
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => selectDay(day.date)}
+                      className={cn(
+                        "flex min-h-0 flex-col bg-canvas px-0.5 py-1 text-left transition-colors",
+                        !inMonth && "text-ink-muted-48/40",
+                        inMonth && day.isWeekend && "text-ink-muted-48",
+                        inMonth && !day.isWeekend && "text-ink",
+                        isHighlightedDay && "bg-primary/10 ring-1 ring-inset ring-primary/35",
+                        isToday && !isHighlightedDay && "bg-primary/6 ring-1 ring-inset ring-primary/20",
+                        !isHighlightedDay && !isToday && "hover:bg-pearl"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "mx-auto type-caption font-semibold leading-none",
+                          isToday && "text-primary"
+                        )}
+                      >
+                        {day.dayOfMonth}
+                      </span>
+                      {dayEvents.length > 0 && (
+                        <span className="mt-1 flex flex-wrap justify-center gap-0.5 px-0.5">
+                          {dayEvents.slice(0, 3).map((event) => {
+                            const type = getEventVisualType(
+                              event,
+                              focusBlockEventIds,
+                              threadMeetingEventIds
+                            );
+                            const styles = eventTypeClasses(type);
+                            return (
+                              <span
+                                key={event.id}
+                                className={cn("h-1 w-1 rounded-full", styles.dot)}
+                              />
+                            );
+                          })}
+                          {dayEvents.length > 3 && (
+                            <span className="type-fine text-ink-muted-48">+</span>
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {onDefrag && (
-        <div className="shrink-0 border-t border-border p-2">
-          <Button variant="outline" size="sm" className="w-full text-xs" onClick={onDefrag}>
+        <div className="shrink-0 border-t border-hairline p-2">
+          <Button variant="outline" size="sm" className="w-full type-caption" onClick={onDefrag}>
             Defrag my week
           </Button>
         </div>

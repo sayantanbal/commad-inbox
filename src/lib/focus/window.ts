@@ -3,6 +3,8 @@ import "server-only";
 import { and, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { focusAutoReplies, userPreferences } from "@/lib/db/schema";
+import type { WorkingDaysStructured } from "@/lib/preferences/sanitize-working-days";
+import { sanitizeWorkingDaysText } from "@/lib/preferences/sanitize-working-days";
 
 export async function getUserPreferences(userId: string) {
   const [row] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
@@ -82,11 +84,24 @@ export async function updateUserPreferences(
     autoResponderTemplate: string;
     followUpDaysDefault: number;
     timezone: string;
+    workingDaysStructured: WorkingDaysStructured | null;
+    workingDaysTextOverride: string | null;
+    workingDaysSource: "wizard" | "override";
+    onboardingCompletedAt: Date | null;
   }>
 ) {
   await getUserPreferences(userId);
+
+  const normalized = { ...patch };
+  if ("workingDaysTextOverride" in patch) {
+    normalized.workingDaysTextOverride =
+      patch.workingDaysTextOverride == null
+        ? null
+        : sanitizeWorkingDaysText(patch.workingDaysTextOverride);
+  }
+
   await db
     .update(userPreferences)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...normalized, updatedAt: new Date() })
     .where(eq(userPreferences.userId, userId));
 }

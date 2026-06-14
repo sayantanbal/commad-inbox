@@ -1,6 +1,8 @@
 interface RawEmailInput {
   from: string;
   to: string[];
+  cc?: string[];
+  bcc?: string[];
   subject: string;
   bodyHtml: string;
   inReplyTo?: string;
@@ -19,6 +21,8 @@ export function buildRawEmail(input: RawEmailInput): string {
   const headers = [
     `From: ${input.from}`,
     `To: ${input.to.join(", ")}`,
+    ...(input.cc?.length ? [`Cc: ${input.cc.join(", ")}`] : []),
+    ...(input.bcc?.length ? [`Bcc: ${input.bcc.join(", ")}`] : []),
     `Subject: ${input.subject}`,
     "MIME-Version: 1.0",
     'Content-Type: text/html; charset="UTF-8"',

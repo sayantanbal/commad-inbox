@@ -1,19 +1,9 @@
 "use client";
 
 import { format } from "date-fns";
-import { Calendar, Mail } from "lucide-react";
+import { Calendar, Clock, Mail } from "lucide-react";
 import { getToolName, type DynamicToolUIPart, type ToolUIPart } from "ai";
 import { Button } from "@/components/ui/button";
-
-/*
-  Spec — Tool Approval Card:
-    • parchment bg, rounded-lg (18px), 1px primary border, 16px padding
-    • caption-strong ALLCAPS primary "PENDING APPROVAL"
-    • body-strong action description
-    • nested canvas-bordered preview block (caption 14px)
-    • CTAs: button-primary "Approve & Send" + button-dark-utility "Edit first"
-      + text-link "Reject"
-*/
 
 type ApprovableToolPart = ToolUIPart | DynamicToolUIPart;
 
@@ -21,6 +11,7 @@ interface AgentToolApprovalProps {
   part: ApprovableToolPart;
   onApprove: (approvalId: string) => void;
   onDeny: (approvalId: string) => void;
+  onEdit?: (toolName: string, input: Record<string, unknown>) => void;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -31,26 +22,28 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
-/**
- * Shell used by every variant — owns the spec's structural decisions
- * (parchment bg + primary border, label, action title, preview block, CTAs).
- */
 function ApprovalCard({
   icon,
   title,
   approveLabel,
   preview,
   approvalId,
+  toolName,
+  input,
   onApprove,
   onDeny,
+  onEdit,
 }: {
   icon: React.ReactNode;
   title: string;
   approveLabel: string;
   preview: React.ReactNode;
   approvalId: string;
+  toolName: string;
+  input: Record<string, unknown>;
   onApprove: (id: string) => void;
   onDeny: (id: string) => void;
+  onEdit?: (toolName: string, input: Record<string, unknown>) => void;
 }) {
   return (
     <div
@@ -74,9 +67,11 @@ function ApprovalCard({
         <Button size="sm" onClick={() => onApprove(approvalId)}>
           {approveLabel}
         </Button>
-        <Button size="sm" variant="dark-utility">
-          Edit first
-        </Button>
+        {onEdit && (
+          <Button size="sm" variant="dark-utility" onClick={() => onEdit(toolName, input)}>
+            Edit first
+          </Button>
+        )}
         <button
           type="button"
           onClick={() => onDeny(approvalId)}
@@ -89,15 +84,41 @@ function ApprovalCard({
   );
 }
 
+function RecipientRows({ input }: { input: Record<string, unknown> }) {
+  const to = asStringArray(input.to);
+  const cc = asStringArray(input.cc);
+  const bcc = asStringArray(input.bcc);
+  return (
+    <div className="grid grid-cols-[3rem_1fr] gap-x-3 gap-y-1.5">
+      <span className="type-fine text-ink-muted-48">To</span>
+      <span className="type-caption text-ink">{to.join(", ") || "—"}</span>
+      {cc.length > 0 && (
+        <>
+          <span className="type-fine text-ink-muted-48">Cc</span>
+          <span className="type-caption text-ink">{cc.join(", ")}</span>
+        </>
+      )}
+      {bcc.length > 0 && (
+        <>
+          <span className="type-fine text-ink-muted-48">Bcc</span>
+          <span className="type-caption text-ink">{bcc.join(", ")}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function SendEmailApproval({
   input,
   onApprove,
   onDeny,
+  onEdit,
   approvalId,
 }: {
   input: Record<string, unknown>;
   onApprove: (id: string) => void;
   onDeny: (id: string) => void;
+  onEdit?: (toolName: string, input: Record<string, unknown>) => void;
   approvalId: string;
 }) {
   const to = asStringArray(input.to);
@@ -110,21 +131,72 @@ function SendEmailApproval({
       title={`Send email to ${to[0] ?? "recipient"}`}
       approveLabel="Approve & send"
       approvalId={approvalId}
+      toolName="send_email"
+      input={input}
       onApprove={onApprove}
       onDeny={onDeny}
+      onEdit={onEdit}
       preview={
         <div className="space-y-2">
+          <RecipientRows input={input} />
           <div className="grid grid-cols-[3rem_1fr] gap-x-3 gap-y-1.5">
-            <span className="type-fine text-ink-muted-48">To</span>
-            <span className="type-caption text-ink">{to.join(", ") || "—"}</span>
             <span className="type-fine text-ink-muted-48">Subject</span>
             <span className="type-caption text-ink">{subject || "—"}</span>
           </div>
           <div className="border-t border-hairline pt-2">
             <p className="type-fine text-ink-muted-48 mb-1">Message</p>
-            <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">
-              {body || "—"}
-            </p>
+            <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">{body || "—"}</p>
+          </div>
+        </div>
+      }
+    />
+  );
+}
+
+function ScheduleSendApproval({
+  input,
+  onApprove,
+  onDeny,
+  onEdit,
+  approvalId,
+}: {
+  input: Record<string, unknown>;
+  onApprove: (id: string) => void;
+  onDeny: (id: string) => void;
+  onEdit?: (toolName: string, input: Record<string, unknown>) => void;
+  approvalId: string;
+}) {
+  const subject = typeof input.subject === "string" ? input.subject : "";
+  const body = typeof input.body === "string" ? input.body : "";
+  const sendAtRaw = typeof input.sendAt === "string" ? input.sendAt : "";
+  const sendAt = sendAtRaw ? new Date(sendAtRaw) : null;
+
+  return (
+    <ApprovalCard
+      icon={<Clock className="h-3.5 w-3.5" strokeWidth={1.75} />}
+      title="Schedule email send"
+      approveLabel="Approve & schedule"
+      approvalId={approvalId}
+      toolName="schedule_send"
+      input={input}
+      onApprove={onApprove}
+      onDeny={onDeny}
+      onEdit={onEdit}
+      preview={
+        <div className="space-y-2">
+          <RecipientRows input={input} />
+          <div className="grid grid-cols-[3rem_1fr] gap-x-3 gap-y-1.5">
+            <span className="type-fine text-ink-muted-48">When</span>
+            <span className="type-caption text-ink">
+              {sendAt && !Number.isNaN(sendAt.getTime())
+                ? format(sendAt, "EEE, MMM d · h:mm a")
+                : sendAtRaw || "—"}
+            </span>
+            <span className="type-fine text-ink-muted-48">Subject</span>
+            <span className="type-caption text-ink">{subject || "—"}</span>
+          </div>
+          <div className="border-t border-hairline pt-2">
+            <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">{body || "—"}</p>
           </div>
         </div>
       }
@@ -136,21 +208,21 @@ function CalendarInviteApproval({
   input,
   onApprove,
   onDeny,
+  onEdit,
   approvalId,
 }: {
   input: Record<string, unknown>;
   onApprove: (id: string) => void;
   onDeny: (id: string) => void;
+  onEdit?: (toolName: string, input: Record<string, unknown>) => void;
   approvalId: string;
 }) {
   const summary = typeof input.summary === "string" ? input.summary : "Meeting";
   const startRaw = typeof input.start === "string" ? input.start : "";
   const start = startRaw ? new Date(startRaw) : null;
-  const duration =
-    typeof input.durationMinutes === "number" ? input.durationMinutes : 30;
+  const duration = typeof input.durationMinutes === "number" ? input.durationMinutes : 30;
   const attendees = asStringArray(input.attendees);
-  const description =
-    typeof input.description === "string" ? input.description : "";
+  const description = typeof input.description === "string" ? input.description : "";
 
   const whenLabel =
     start && !Number.isNaN(start.getTime())
@@ -163,8 +235,11 @@ function CalendarInviteApproval({
       title={`Send invite — ${summary}`}
       approveLabel="Approve & send invite"
       approvalId={approvalId}
+      toolName="create_calendar_invite"
+      input={input}
       onApprove={onApprove}
       onDeny={onDeny}
+      onEdit={onEdit}
       preview={
         <div className="space-y-2">
           <div className="grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-1.5">
@@ -176,21 +251,13 @@ function CalendarInviteApproval({
               {duration ? ` · ${duration} min` : ""}
             </span>
             <span className="type-fine text-ink-muted-48">Guests</span>
-            <span className="type-caption text-ink">
-              {attendees.join(", ") || "—"}
-            </span>
+            <span className="type-caption text-ink">{attendees.join(", ") || "—"}</span>
           </div>
           {description && (
             <div className="border-t border-hairline pt-2">
-              <p className="type-fine text-ink-muted-48 mb-1">Notes</p>
-              <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">
-                {description}
-              </p>
+              <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">{description}</p>
             </div>
           )}
-          <p className="type-fine text-ink-muted-48 border-t border-hairline pt-2">
-            AI · A Google Meet link will be added and attendees will be notified.
-          </p>
         </div>
       }
     />
@@ -201,6 +268,7 @@ export function AgentToolApproval({
   part,
   onApprove,
   onDeny,
+  onEdit,
 }: AgentToolApprovalProps) {
   const input = (part.input as Record<string, unknown> | undefined) ?? {};
   const toolName = getToolName(part);
@@ -215,6 +283,19 @@ export function AgentToolApproval({
         approvalId={approvalId}
         onApprove={onApprove}
         onDeny={onDeny}
+        onEdit={onEdit}
+      />
+    );
+  }
+
+  if (toolName === "schedule_send") {
+    return (
+      <ScheduleSendApproval
+        input={input}
+        approvalId={approvalId}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onEdit={onEdit}
       />
     );
   }
@@ -226,6 +307,7 @@ export function AgentToolApproval({
         approvalId={approvalId}
         onApprove={onApprove}
         onDeny={onDeny}
+        onEdit={onEdit}
       />
     );
   }
@@ -236,12 +318,14 @@ export function AgentToolApproval({
       title="Confirm action"
       approveLabel="Confirm"
       approvalId={approvalId}
+      toolName={toolName}
+      input={input}
       onApprove={onApprove}
       onDeny={onDeny}
+      onEdit={onEdit}
       preview={
         <p className="type-caption text-ink-muted-80">
-          The agent wants to run{" "}
-          <span className="font-mono text-ink">{toolName}</span>.
+          The agent wants to run <span className="font-mono text-ink">{toolName}</span>.
         </p>
       }
     />

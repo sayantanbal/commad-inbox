@@ -1,22 +1,27 @@
 import { NextResponse } from "next/server";
+import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
-import { getContactsForUser } from "@/lib/contacts/rebuild";
+import {
+  addAppContact,
+  getMergedContactsForUser,
+} from "@/lib/contacts/app-contacts";
+import { contactBodySchema } from "@/lib/schemas/api";
 
 export async function GET() {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const rows = await getContactsForUser(auth.userId);
-  return NextResponse.json({
-    contacts: rows.map((row) => ({
-      id: row.id,
-      email: row.email,
-      displayName: row.displayName,
-      lastContactAt: row.lastContactAt.toISOString(),
-      avgResponseHours: row.avgResponseHours,
-      emailCount30d: row.emailCount30d,
-      warmth: row.warmth,
-      openCommitmentCount: row.openCommitmentCount,
-    })),
-  });
+  const rows = await getMergedContactsForUser(auth.userId);
+  return NextResponse.json({ contacts: rows });
+}
+
+export async function POST(request: Request) {
+  const auth = await requireSessionApi();
+  if ("error" in auth) return auth.error;
+
+  const parsed = await parseJsonBody(request, contactBodySchema);
+  if (!parsed.ok) return parsed.response;
+
+  const { id, created } = await addAppContact(auth.userId, parsed.data, "manual");
+  return NextResponse.json({ id, created });
 }

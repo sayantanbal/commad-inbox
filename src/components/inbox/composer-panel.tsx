@@ -26,7 +26,8 @@ interface ComposerPanelProps {
   onClose: () => void;
   onSend: (body: string) => void;
   onToneChange?: (tone: "professional" | "friendly" | "brief") => void;
-  onSendLater?: (body: string, suggestedAt?: Date) => void;
+  onSendLater?: (body: string) => void;
+  onOpenSendLater?: (body: string) => void;
 }
 
 export function ComposerPanel({
@@ -41,6 +42,7 @@ export function ComposerPanel({
   onSend,
   onToneChange,
   onSendLater,
+  onOpenSendLater,
 }: ComposerPanelProps) {
   const onCloseRef = useRef(onClose);
   const onSendRef = useRef(onSend);
@@ -189,13 +191,21 @@ export function ComposerPanel({
       </div>
 
       {sendTimeSuggestion && (
-        <p className="border-b border-divider-soft px-4 py-2 type-caption text-ink-muted-48">
+        <button
+          type="button"
+          onClick={() => {
+            const html = editor?.getHTML() ?? "";
+            if (onOpenSendLater) onOpenSendLater(html);
+            else onSendLater?.(html);
+          }}
+          className="border-b border-divider-soft px-4 py-2 text-left type-caption text-ink-muted-48 w-full hover:bg-pearl transition-colors"
+        >
           <span className="text-primary">AI ·</span> Suggested send time:{" "}
           <span className="text-ink-muted-80">
             {new Date(sendTimeSuggestion.suggestedAt).toLocaleString()}
           </span>{" "}
-          — {sendTimeSuggestion.reason}
-        </p>
+          — {sendTimeSuggestion.reason} (click to schedule)
+        </button>
       )}
 
       {/* Send row */}
@@ -217,18 +227,15 @@ export function ComposerPanel({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {onSendLater && (
+          {(onSendLater || onOpenSendLater) && (
             <button
               type="button"
               className="btn-pearl-capsule"
-              onClick={() =>
-                onSendLater(
-                  editor?.getHTML() ?? "",
-                  sendTimeSuggestion
-                    ? new Date(sendTimeSuggestion.suggestedAt)
-                    : undefined
-                )
-              }
+              onClick={() => {
+                const html = editor?.getHTML() ?? "";
+                if (onOpenSendLater) onOpenSendLater(html);
+                else onSendLater?.(html);
+              }}
             >
               Send later
             </button>

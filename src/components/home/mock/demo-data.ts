@@ -38,3 +38,54 @@ export const mockSendTime = {
   suggested: "Mon 4:00 PM",
   reason: "Priya usually replies Tue 10am — send the evening before.",
 };
+
+export const mockWorkingDaysText =
+  "I work Mon–Thu 9:00–18:00 and Fri 9:00–13:00 (Asia/Kolkata). No meetings before 10:00. Lunch 13:00–14:00 blocked daily.";
+
+export const schedulingDurations = [30, 45, 60] as const;
+
+export type SchedulingDuration = (typeof schedulingDurations)[number];
+
+export const mockCommitmentSetupSteps = [
+  { step: 1, title: "Connect Gmail", detail: "One OAuth sign-in — we read threads, never send without you." },
+  { step: 2, title: "AI extracts commitments", detail: "Every webhook pass finds promises made and owed." },
+  { step: 3, title: "Press W anytime", detail: "Your Waiting For list stays one keystroke away." },
+];
+
+export const featureTabCopy: Record<
+  string,
+  { label: string; description: string; key?: string }
+> = {
+  commitments: {
+    label: "Commitments",
+    description: "Tracks what you promised and what you're waiting on — across every thread.",
+    key: "W",
+  },
+  prebrief: {
+    label: "Pre-Brief",
+    description: "Surfaces tone, open threads, and context before every meeting.",
+    key: "B",
+  },
+  people: {
+    label: "People",
+    description: "Scores relationship warmth from reply latency and open commitments.",
+  },
+  focus: {
+    label: "Focus",
+    description: "Batches notifications into check windows with a one-time auto-reply per sender.",
+  },
+  export: {
+    label: "Export",
+    description: "Turns thread action items into Linear issues in one keystroke.",
+    key: "T",
+  },
+  snippets: {
+    label: "Snippets",
+    description: "Expands reusable templates when you type // in the composer.",
+    key: "//",
+  },
+  sendtime: {
+    label: "Send time",
+    description: "Suggests optimal send times based on each contact's reply patterns.",
+  },
+};

@@ -10,9 +10,10 @@ import {
   type ToolUIPart,
   type UIMessage,
 } from "ai";
-import { Bot, Clock, Loader2, Plus, Send, X } from "lucide-react";
+import { Bot, CalendarRange, Clock, Inbox, Loader2, Plus, Send, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentToolApproval } from "@/components/inbox/agent-tool-approval";
+import { AgentMentionInput, type MentionContact } from "@/components/inbox/agent-mention-input";
 import { AiProviderSelect } from "@/components/inbox/ai-provider-select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -52,9 +53,21 @@ function isTextPart(part: UIMessage["parts"][number]): part is { type: "text"; t
   return part.type === "text" && "text" in part;
 }
 
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
+}
+
 function renderToolPart(
   part: ToolPart,
-  addToolApprovalResponse: ReturnType<typeof useChat>["addToolApprovalResponse"]
+  addToolApprovalResponse: ReturnType<typeof useChat>["addToolApprovalResponse"],
+  onEdit?: (toolName: string, input: Record<string, unknown>) => void,
+  onToolApproved?: (toolName: string, input: Record<string, unknown>) => void
 ) {
   const toolName = getToolName(part);
 
@@ -63,7 +76,12 @@ function renderToolPart(
       <AgentToolApproval
         key={part.toolCallId}
         part={part}
-        onApprove={(id) => addToolApprovalResponse({ id, approved: true })}
+        onApprove={(id) => {
+          if (part.input && typeof part.input === "object") {
+            onToolApproved?.(toolName, part.input as Record<string, unknown>);
+          }
+          addToolApprovalResponse({ id, approved: true });
+        }}
         onDeny={(id) =>
           addToolApprovalResponse({
             id,
@@ -71,6 +89,7 @@ function renderToolPart(
             reason: "User declined this action",
           })
         }
+        onEdit={onEdit}
       />
     );
   }
@@ -150,10 +169,23 @@ function ThinkingIndicator({ label }: { label: string }) {
 
 export function AgentChatPanel({
   onOpenSettings,
+  onOpenInbox,
+  onOpenCalendar,
+  workspaceActive,
+  contacts = [],
+  onEditTool,
+  onToolApproved,
 }: {
   onOpenSettings?: () => void;
+  onOpenInbox?: () => void;
+  onOpenCalendar?: () => void;
+  workspaceActive?: "inbox" | "calendar" | null;
+  contacts?: MentionContact[];
+  onEditTool?: (toolName: string, input: Record<string, unknown>) => void;
+  onToolApproved?: (toolName: string, input: Record<string, unknown>) => void;
 } = {}) {
   const [input, setInput] = useState("");
+  const [mentions, setMentions] = useState<MentionContact[]>([]);
   const [conversations, setConversations] = useState<AgentConversationItem[]>([]);
   const [openTabIds, setOpenTabIds] = useState<string[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -168,11 +200,13 @@ export function AgentChatPanel({
   const fallbackAttemptRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSendRef = useRef<string | null>(null);
+  const mentionsRef = useRef<MentionContact[]>([]);
   const historyRef = useRef<HTMLDivElement>(null);
   const autoOpenedRef = useRef(false);
 
   providerRef.current = provider;
   conversationIdRef.current = conversationId;
+  mentionsRef.current = mentions;
 
   const chatId = conversationId ?? "draft";
 
@@ -187,6 +221,7 @@ export function AgentChatPanel({
             messages: messages.filter((m) => m.id !== WELCOME_MESSAGE_ID),
             provider: providerRef.current,
             conversationId: conversationIdRef.current ?? undefined,
+            mentionedContacts: mentionsRef.current,
           },
         }),
       }),
@@ -354,6 +389,7 @@ export function AgentChatPanel({
     const text = input.trim();
     if (!text || isBusy) return;
     setInput("");
+    setMentions([]);
     lastUserTextRef.current = text;
     fallbackAttemptRef.current = false;
 
@@ -395,6 +431,40 @@ export function AgentChatPanel({
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card">
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
+        {(onOpenInbox || onOpenCalendar) && (
+          <div className="flex shrink-0 items-center gap-1 pr-2 border-r border-border mr-1">
+            {onOpenInbox && (
+              <button
+                type="button"
+                onClick={onOpenInbox}
+                className={cn(
+                  "flex h-7 items-center gap-1 rounded-md px-2 text-[11px]",
+                  workspaceActive === "inbox"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-muted/50"
+                )}
+              >
+                <Inbox className="h-3.5 w-3.5" />
+                Inbox
+              </button>
+            )}
+            {onOpenCalendar && (
+              <button
+                type="button"
+                onClick={onOpenCalendar}
+                className={cn(
+                  "flex h-7 items-center gap-1 rounded-md px-2 text-[11px]",
+                  workspaceActive === "calendar"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-muted/50"
+                )}
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+                Calendar
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
           {openTabs.length === 0 ? (
             <span className="truncate px-2 text-[11px] text-muted-foreground">{activeTitle}</span>
@@ -534,7 +604,7 @@ export function AgentChatPanel({
                 }
 
                 if (isToolUIPart(part)) {
-                  return renderToolPart(part, addToolApprovalResponse);
+                  return renderToolPart(part, addToolApprovalResponse, onEditTool, onToolApproved);
                 }
 
                 return null;
@@ -567,19 +637,16 @@ export function AgentChatPanel({
           />
         </div>
         <div className="flex items-center gap-2 rounded-full border border-hairline bg-canvas pl-4 pr-1 py-1 transition-colors focus-within:border-[color:var(--color-primary-focus)]/60">
-          <input
-            type="text"
+          <AgentMentionInput
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Ask the agent…"
+            mentions={mentions}
+            contacts={contacts}
             disabled={isBusy}
-            className="flex-1 bg-transparent type-body text-ink outline-none placeholder:text-ink-muted-48 disabled:opacity-60"
+            onChange={(value, nextMentions) => {
+              setInput(value);
+              setMentions(nextMentions);
+            }}
+            onSubmit={handleSend}
           />
           <button
             type="button"

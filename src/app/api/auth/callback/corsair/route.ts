@@ -11,6 +11,7 @@ import {
 } from "@/lib/corsair/oauth";
 import { triggerInboxBackfill } from "@/lib/backfill/inbox-backfill";
 import { isBackfillComplete } from "@/lib/users/backfill-status";
+import { getOnboardingRedirectPath } from "@/lib/onboarding/status";
 import { renewWatchesForTenant } from "@/lib/webhooks/renew-watches";
 
 export async function GET(request: NextRequest) {
@@ -63,7 +64,8 @@ export async function GET(request: NextRequest) {
       void renewWatchesForTenant(result.tenantId, { force: true }).catch((error) => {
         console.error("[oauth] watch renewal failed", error);
       });
-      const response = NextResponse.redirect(new URL("/inbox", request.url));
+      const redirectPath = await getOnboardingRedirectPath(result.tenantId);
+      const response = NextResponse.redirect(new URL(redirectPath, request.url));
       response.cookies.delete(OAUTH_STATE_COOKIE);
       return response;
     }

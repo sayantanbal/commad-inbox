@@ -113,6 +113,14 @@ export const agentChatBodySchema = strictObject({
   messages: z.array(uiMessageSchema).default([]),
   provider: aiProviderSchema.default("openai"),
   conversationId: z.string().min(1).optional(),
+  mentionedContacts: z
+    .array(
+      z.object({
+        email: z.string().email(),
+        displayName: z.string(),
+      })
+    )
+    .optional(),
 });
 
 export const conversationIdBodySchema = strictObject({
@@ -173,12 +181,48 @@ export const preBriefQuerySchema = z.object({
   threadId: threadIdField.optional(),
 });
 
+const workingDaySlotSchema = z.object({
+  enabled: z.boolean(),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+export const workingDaysStructuredSchema = z.object({
+  timezone: z.string().min(1).max(100),
+  days: z.record(z.string(), workingDaySlotSchema),
+});
+
 export const preferencesPatchBodySchema = strictObject({
   batchWindows: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1).max(6).optional(),
   focusModeEnabled: z.boolean().optional(),
   autoResponderTemplate: z.string().min(1).max(500).optional(),
   followUpDaysDefault: z.number().int().min(1).max(30).optional(),
   timezone: z.string().min(1).max(100).optional(),
+  workingDaysStructured: workingDaysStructuredSchema.nullable().optional(),
+  workingDaysTextOverride: z.string().max(2048).nullable().optional(),
+  workingDaysSource: z.enum(["wizard", "override"]).optional(),
+  onboardingCompletedAt: z.string().datetime().nullable().optional(),
+});
+
+export const contactBodySchema = strictObject({
+  email: z.string().email(),
+  displayName: z.string().min(1).max(200).optional(),
+});
+
+export const contactDismissBodySchema = strictObject({
+  email: z.string().email(),
+});
+
+export const calendarEventPatchBodySchema = strictObject({
+  eventId: z.string().min(1),
+  slotStart: z.string().datetime(),
+  durationMinutes: z.number().int().min(15).max(480).optional(),
+});
+
+export const contactsImportJsonBodySchema = strictObject({
+  source: z.enum(["gmail-sent", "google-contacts"]).optional(),
+  emails: z.array(z.string().email()).optional(),
+  text: z.string().max(50000).optional(),
 });
 
 export const snippetBodySchema = strictObject({

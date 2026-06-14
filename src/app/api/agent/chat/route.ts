@@ -40,6 +40,7 @@ export async function POST(request: Request) {
   const provider = parsed.data.provider;
 
   try {
+    const mentionContext = parsed.data.mentionedContacts ?? [];
     const tools = buildAgentMcpTools(auth.tenant, auth.userId, auth.userEmail);
     const activeProvider = await resolveAgentModelProvider(auth.userId, provider);
     const apiKey = await resolveApiKey(auth.userId, activeProvider);
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
 
     const result = streamText({
       model,
-      system: buildAgentSystemPrompt(auth.userEmail),
+      system: buildAgentSystemPrompt(auth.userEmail, mentionContext),
       messages: await convertToModelMessages(messages),
       tools,
       stopWhen: stepCountIs(8),

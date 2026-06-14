@@ -32,7 +32,7 @@ export function buildAgentMcpTools(
     setup: false,
   });
 
-  const tools: ToolSet = { ...buildAgentActionTools(tenant, userEmail) };
+  const tools: ToolSet = { ...buildAgentActionTools(tenant, userId, userEmail) };
 
   for (const def of defs) {
     if (def.name === "run_script") continue;
