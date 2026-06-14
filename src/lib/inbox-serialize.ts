@@ -35,6 +35,37 @@ export type SerializedInboxData = {
   >;
 };
 
+export type SerializedThread = Omit<Thread, "timestamp" | "messages"> & {
+  timestamp: string;
+  messages: Array<
+    Omit<Thread["messages"][number], "timestamp"> & {
+      timestamp: string;
+    }
+  >;
+};
+
+export function serializeThreads(threads: Thread[]): SerializedThread[] {
+  return threads.map((thread) => ({
+    ...thread,
+    timestamp: thread.timestamp.toISOString(),
+    messages: thread.messages.map((message) => ({
+      ...message,
+      timestamp: message.timestamp.toISOString(),
+    })),
+  }));
+}
+
+export function deserializeThreads(threads: SerializedThread[]): Thread[] {
+  return threads.map((thread) => ({
+    ...thread,
+    timestamp: new Date(thread.timestamp),
+    messages: thread.messages.map((message) => ({
+      ...message,
+      timestamp: new Date(message.timestamp),
+    })),
+  }));
+}
+
 export function serializeInboxData(input: {
   threads: Thread[];
   classifications: Classification[];

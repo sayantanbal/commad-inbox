@@ -4,8 +4,16 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { KbdBadge } from "@/components/ui/kbd-badge";
+import type { SendTimeSuggestion } from "@/lib/schemas/domain";
+
+interface SnippetOption {
+  id: string;
+  name: string;
+  body: string;
+}
 
 interface ComposerPanelProps {
   open: boolean;
@@ -13,10 +21,12 @@ interface ComposerPanelProps {
   modLabel: string;
   initialContent?: string;
   loading?: boolean;
+  snippets?: SnippetOption[];
+  sendTimeSuggestion?: SendTimeSuggestion | null;
   onClose: () => void;
   onSend: (body: string) => void;
   onToneChange?: (tone: "professional" | "friendly" | "brief") => void;
-  onSendLater?: (body: string) => void;
+  onSendLater?: (body: string, suggestedAt?: Date) => void;
 }
 
 export function ComposerPanel({
@@ -25,6 +35,8 @@ export function ComposerPanel({
   modLabel,
   initialContent = "",
   loading = false,
+  snippets = [],
+  sendTimeSuggestion,
   onClose,
   onSend,
   onToneChange,
@@ -33,6 +45,8 @@ export function ComposerPanel({
   const onCloseRef = useRef(onClose);
   const onSendRef = useRef(onSend);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  const [snippetQuery, setSnippetQuery] = useState("");
+  const [snippetOpen, setSnippetOpen] = useState(false);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -43,7 +57,7 @@ export function ComposerPanel({
     extensions: [
       StarterKit,
       Link.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: "Write your reply..." }),
+      Placeholder.configure({ placeholder: "Write your reply… Type // for snippets" }),
     ],
     content: initialContent,
     editorProps: {
@@ -51,8 +65,23 @@ export function ComposerPanel({
         class:
           "prose prose-invert prose-sm max-w-none min-h-[120px] px-4 py-3 focus:outline-none [&_p]:my-1",
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
+        const text = view.state.doc.textContent;
+        if (text.endsWith("//") || (text.includes("//") && !snippetOpen)) {
+          const match = text.match(/\/\/(\w*)$/);
+          if (match) {
+            setSnippetOpen(true);
+            setSnippetQuery(match[1] ?? "");
+          }
+        } else {
+          setSnippetOpen(false);
+        }
+
         if (event.key === "Escape") {
+          if (snippetOpen) {
+            setSnippetOpen(false);
+            return true;
+          }
           event.preventDefault();
           event.stopPropagation();
           onCloseRef.current();
@@ -84,6 +113,7 @@ export function ComposerPanel({
   useEffect(() => {
     if (editor && open) {
       editor.commands.setContent(initialContent || "<p></p>");
+      setSnippetOpen(false);
     }
   }, [editor, open, initialContent]);
 
@@ -93,68 +123,124 @@ export function ComposerPanel({
     }
   }, [editor, open, loading]);
 
+  const filteredSnippets = snippets.filter((s) =>
+    s.name.toLowerCase().includes(snippetQuery.toLowerCase())
+  );
+
+  const insertSnippet = (snippet: SnippetOption) => {
+    if (!editor) return;
+    const plain = editor.getText().replace(/\/\/\w*$/, "");
+    editor.commands.setContent(snippet.body);
+    if (plain.trim()) {
+      editor.commands.insertContentAt(0, `<p>${plain}</p>`);
+    }
+    setSnippetOpen(false);
+    editor.commands.focus("end");
+  };
+
   if (!open) return null;
 
   return (
-    <div className="border-t border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
+    <div className="border-t border-hairline bg-canvas">
+      {/* Composer header */}
+      <div className="flex items-center justify-between border-b border-divider-soft px-4 py-3">
         <div>
-          <p className="text-xs text-muted-foreground">Reply to</p>
-          <p className="text-sm font-medium">{subject}</p>
+          <p className="type-fine text-ink-muted-48 uppercase" style={{ letterSpacing: "0.06em" }}>
+            Reply to
+          </p>
+          <p className="type-caption text-ink mt-0.5 truncate">{subject}</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex items-center gap-2 type-caption text-ink-muted-80 hover:text-ink transition-colors"
+        >
           Cancel
-          <kbd className="ml-1 rounded border border-border px-1 font-mono text-[10px] text-muted-foreground">
-            Esc
-          </kbd>
-        </Button>
+          <KbdBadge>Esc</KbdBadge>
+        </button>
       </div>
 
-      <div className="border-b border-border">
+      {snippetOpen && filteredSnippets.length > 0 && (
+        <div className="border-b border-divider-soft bg-pearl px-3 py-2">
+          {filteredSnippets.slice(0, 5).map((snippet) => (
+            <button
+              key={snippet.id}
+              type="button"
+              className="block w-full rounded-[8px] px-3 py-2 text-left type-caption text-ink hover:bg-canvas transition-colors"
+              onClick={() => insertSnippet(snippet)}
+            >
+              <span className="font-mono text-ink-muted-48">//</span>
+              {snippet.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Editor — min-height 180px per spec */}
+      <div className="border-b border-divider-soft min-h-[180px]">
         {loading ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground">Generating draft…</p>
+          <p className="px-4 py-6 type-body text-ink-muted-48">Generating draft…</p>
         ) : (
-          <EditorContent editor={editor} />
+          <EditorContent
+            editor={editor}
+            className="[&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:px-4 [&_.ProseMirror]:py-4 [&_.ProseMirror]:text-[17px] [&_.ProseMirror]:leading-[1.47] [&_.ProseMirror]:text-ink [&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-ink-muted-48 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0"
+          />
         )}
       </div>
 
-      <div className="flex items-center justify-between px-4 py-2">
+      {sendTimeSuggestion && (
+        <p className="border-b border-divider-soft px-4 py-2 type-caption text-ink-muted-48">
+          <span className="text-primary">AI ·</span> Suggested send time:{" "}
+          <span className="text-ink-muted-80">
+            {new Date(sendTimeSuggestion.suggestedAt).toLocaleString()}
+          </span>{" "}
+          — {sendTimeSuggestion.reason}
+        </p>
+      )}
+
+      {/* Send row */}
+      <div className="flex items-center justify-between px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           {(["professional", "friendly", "brief"] as const).map((tone) => (
-            <Button
+            <button
               key={tone}
-              variant="outline"
-              size="sm"
-              className="text-xs capitalize"
+              type="button"
               disabled={loading}
               onClick={() => onToneChange?.(tone)}
+              className="btn-pearl-capsule disabled:opacity-50 capitalize"
             >
               {tone}
-            </Button>
+            </button>
           ))}
-          <span className="text-[10px] text-muted-foreground">
-            {modLabel}Z undo · {modLabel}⇧Z redo
+          <span className="type-fine text-ink-muted-48 ml-1">
+            <KbdBadge>{modLabel}Z</KbdBadge> undo · // for snippets
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {onSendLater && (
+            <button
+              type="button"
+              className="btn-pearl-capsule"
+              onClick={() =>
+                onSendLater(
+                  editor?.getHTML() ?? "",
+                  sendTimeSuggestion
+                    ? new Date(sendTimeSuggestion.suggestedAt)
+                    : undefined
+                )
+              }
+            >
+              Send later
+            </button>
+          )}
           <Button
-            variant="outline"
-            size="sm"
-            onClick={onSendLater ? () => onSendLater(editor?.getHTML() ?? "") : undefined}
-          >
-            Send later
-          </Button>
-          <Button
-            size="sm"
             onClick={() => {
               const html = editor?.getHTML() ?? "";
               onSend(html);
             }}
           >
             Send
-            <kbd className="ml-1 rounded border border-primary-foreground/20 px-1 font-mono text-[10px]">
-              {modLabel}↵
-            </kbd>
+            <KbdBadge className="!bg-white/15 !text-white/80">{modLabel}↵</KbdBadge>
           </Button>
         </div>
       </div>

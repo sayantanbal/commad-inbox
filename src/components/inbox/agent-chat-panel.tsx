@@ -485,35 +485,47 @@ export function AgentChatPanel() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-        <Bot className="h-4 w-4 text-primary" />
+      <div className="flex items-center gap-3 border-b border-hairline px-4 py-3 bg-canvas">
+        <Bot className="h-5 w-5 text-primary flex-shrink-0" strokeWidth={1.75} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold">{activeTitle}</p>
-          <p className="truncate text-[10px] text-muted-foreground">
-            {AI_PROVIDER_CONFIG[provider].chatLabel} · auto-fallback on rate limits
+          <p className="truncate type-tagline text-ink" style={{ fontSize: 17 }}>
+            {activeTitle}
           </p>
         </div>
-        {isBusy && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        <span
+          className="btn-pearl-capsule"
+          style={{ padding: "4px 10px", fontSize: 12 }}
+        >
+          {AI_PROVIDER_CONFIG[provider].chatLabel}
+        </span>
+        {isBusy && (
+          <Loader2 className="h-4 w-4 animate-spin text-ink-muted-48" strokeWidth={1.75} />
+        )}
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="space-y-3 p-3">
+        <div className="space-y-4 p-4">
           {messages.map((message) => (
             <div key={message.id} className="space-y-2">
               {message.parts.map((part, index) => {
                 if (isTextPart(part) && part.text.trim()) {
+                  if (message.role === "user") {
+                    return (
+                      <div
+                        key={`${message.id}-text-${index}`}
+                        className="ml-12 rounded-[18px] bg-parchment px-4 py-3 type-body text-ink whitespace-pre-wrap"
+                      >
+                        {part.text}
+                      </div>
+                    );
+                  }
                   return (
-                    <div
+                    <p
                       key={`${message.id}-text-${index}`}
-                      className={cn(
-                        "rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
-                        message.role === "user"
-                          ? "ml-6 bg-primary/15 text-foreground"
-                          : "mr-2 bg-secondary text-secondary-foreground"
-                      )}
+                      className="mr-4 type-body text-ink whitespace-pre-wrap"
                     >
                       {part.text}
-                    </div>
+                    </p>
                   );
                 }
 
@@ -536,11 +548,11 @@ export function AgentChatPanel() {
         </div>
       </ScrollArea>
 
-      <div className="border-t border-border p-2">
+      <div className="border-t border-hairline p-3 bg-canvas">
         <div className="mb-2 flex items-center justify-between gap-2">
           <AiProviderSelect value={provider} onChange={setProvider} disabled={isBusy} />
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 rounded-full border border-hairline bg-canvas pl-4 pr-1 py-1 transition-colors focus-within:border-[color:var(--color-primary-focus)]/60">
           <input
             type="text"
             value={input}
@@ -553,23 +565,24 @@ export function AgentChatPanel() {
             }}
             placeholder="Ask the agent…"
             disabled={isBusy}
-            className="flex-1 rounded-md border border-border bg-input px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            className="flex-1 bg-transparent type-body text-ink outline-none placeholder:text-ink-muted-48 disabled:opacity-60"
           />
-          <Button
-            size="icon"
+          <button
+            type="button"
             onClick={handleSend}
             disabled={isBusy || !input.trim()}
             aria-label="Send message"
+            className="btn-icon-circular btn-icon-circular--sm !bg-primary !text-on-primary hover:!bg-[color:var(--color-primary-focus)] disabled:opacity-40 disabled:pointer-events-none"
           >
-            <Send className="h-4 w-4" />
-          </Button>
+            <Send className="h-4 w-4" strokeWidth={1.75} />
+          </button>
         </div>
         <button
           type="button"
-          className="mt-1.5 w-full truncate text-left text-[10px] text-muted-foreground hover:text-foreground"
+          className="mt-2 w-full truncate text-left type-fine text-ink-muted-48 hover:text-ink transition-colors"
           onClick={() => setInput(EXAMPLE_PROMPT)}
         >
-          Example: {EXAMPLE_PROMPT}
+          Try: {EXAMPLE_PROMPT}
         </button>
       </div>
     </div>

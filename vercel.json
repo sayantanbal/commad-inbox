@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/renew-watches",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/nightly",
+      "schedule": "0 3 * * *"
     }
   ]
 }

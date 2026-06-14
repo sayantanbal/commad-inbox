@@ -6,19 +6,26 @@ import {
   getCachedDailyBrief,
   saveDailyBriefCache,
 } from "@/lib/ai/daily-brief-cache";
-import { generateDailyBrief } from "@/lib/ai/daily-brief";
+import { generateDailyBrief, streamDailyBrief } from "@/lib/ai/daily-brief";
 import { getClassificationsForUser } from "@/lib/corsair/classifications";
 import { fetchEventsForTenant } from "@/lib/corsair/events";
 import { fetchThreadsForTenant } from "@/lib/corsair/threads";
 import { assertPhase2Env } from "@/lib/env";
-import { parseAiProvider } from "@/lib/ai/providers";
-import { z } from "zod";
+import { DEFAULT_AI_PROVIDER } from "@/lib/ai/providers";
+import { dailyBriefBodySchema } from "@/lib/schemas/api";
+import type { DailyBrief } from "@/lib/schemas/domain";
 
-const dailyBriefBodySchema = z.object({
-  provider: z.enum(["openai", "gemini"]).optional(),
-  refresh: z.boolean().optional(),
-  timezone: z.string().min(1).optional(),
-});
+export const maxDuration = 60;
+
+type StreamEvent =
+  | { type: "status"; message: string }
+  | { type: "partial"; brief: Partial<DailyBrief> }
+  | { type: "complete"; brief: DailyBrief; provider: string; source: "ai" | "cache" }
+  | { type: "error"; message: string };
+
+function encodeEvent(event: StreamEvent): Uint8Array {
+  return new TextEncoder().encode(`${JSON.stringify(event)}\n`);
+}
 
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
@@ -31,52 +38,107 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 503 });
   }
 
-  let provider = parseAiProvider("openai");
-  let refresh = false;
-  let timezone = "UTC";
+  const parsed = await parseJsonBody(request, dailyBriefBodySchema, { allowEmpty: true });
+  if (!parsed.ok) return parsed.response;
 
-  const parsed = await parseJsonBody(request, dailyBriefBodySchema);
-  if (parsed.ok) {
-    provider = parseAiProvider(parsed.data.provider, provider);
-    refresh = parsed.data.refresh ?? false;
-    timezone = parsed.data.timezone ?? timezone;
+  const provider = parsed.data.provider ?? DEFAULT_AI_PROVIDER;
+  const refresh = parsed.data.refresh ?? false;
+  const stream = parsed.data.stream ?? false;
+  const timezone = parsed.data.timezone ?? "UTC";
+
+  const briefParams = {
+    userName: auth.userEmail.split("@")[0] ?? "",
+    userEmail: auth.userEmail,
+    timezone,
+  };
+
+  if (stream) {
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: StreamEvent) => controller.enqueue(encodeEvent(event));
+
+        try {
+          send({ type: "status", message: "Reading calendar…" });
+          const eventsPromise = fetchEventsForTenant(auth.tenant);
+          send({ type: "status", message: "Scanning inbox…" });
+          const [threads, classifications, events] = await Promise.all([
+            fetchThreadsForTenant(auth.tenant),
+            getClassificationsForUser(auth.userId),
+            eventsPromise,
+          ]);
+
+          const sourceHash = computeBriefSourceHash(threads, classifications, events);
+
+          if (!refresh) {
+            const cached = await getCachedDailyBrief(auth.userId, sourceHash);
+            if (cached) {
+              send({
+                type: "complete",
+                brief: cached.brief,
+                provider: cached.provider ?? provider,
+                source: "cache",
+              });
+              controller.close();
+              return;
+            }
+          }
+
+          send({ type: "status", message: "Writing your brief…" });
+
+          const { brief, provider: used } = await streamDailyBrief(
+            { ...briefParams, threads, classifications, events },
+            provider,
+            (partial) => send({ type: "partial", brief: partial })
+          );
+
+          await saveDailyBriefCache(auth.userId, sourceHash, brief, used);
+
+          send({ type: "complete", brief, provider: used, source: "ai" });
+          controller.close();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Daily brief failed";
+          send({ type: "error", message });
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(body, {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+      },
+    });
   }
 
   try {
     const [threads, classifications, events] = await Promise.all([
-      fetchThreadsForTenant(auth.tenant),
-      getClassificationsForUser(auth.userId),
-      fetchEventsForTenant(auth.tenant),
-    ]);
+        fetchThreadsForTenant(auth.tenant),
+        getClassificationsForUser(auth.userId),
+        fetchEventsForTenant(auth.tenant),
+      ]);
 
-    const sourceHash = computeBriefSourceHash(threads, classifications, events);
+      const sourceHash = computeBriefSourceHash(threads, classifications, events);
 
-    if (!refresh) {
-      const cached = await getCachedDailyBrief(auth.userId, sourceHash);
-      if (cached) {
-        return NextResponse.json({
-          brief: cached.brief,
-          provider: cached.provider,
-          source: "cache",
-        });
+      if (!refresh) {
+        const cached = await getCachedDailyBrief(auth.userId, sourceHash);
+        if (cached) {
+          return NextResponse.json({
+            brief: cached.brief,
+            provider: cached.provider,
+            source: "cache",
+          });
+        }
       }
-    }
 
-    const { brief, provider: used } = await generateDailyBrief(
-      {
-        userName: auth.userEmail.split("@")[0] ?? "",
-        userEmail: auth.userEmail,
-        threads,
-        classifications,
-        events,
-        timezone,
-      },
-      provider
-    );
+      const { brief, provider: used } = await generateDailyBrief(
+        { ...briefParams, threads, classifications, events },
+        provider
+      );
 
-    await saveDailyBriefCache(auth.userId, sourceHash, brief, used);
+      await saveDailyBriefCache(auth.userId, sourceHash, brief, used);
 
-    return NextResponse.json({ brief, provider: used, source: "ai" });
+      return NextResponse.json({ brief, provider: used, source: "ai" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Daily brief failed";
     return NextResponse.json({ error: message }, { status: 500 });

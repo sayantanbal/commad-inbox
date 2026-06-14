@@ -6,6 +6,7 @@ import {
   json,
   pgEnum,
   pgTable,
+  real,
   text,
   timestamp,
   vector,
@@ -23,7 +24,22 @@ export const scheduledSendStatusEnum = pgEnum("scheduled_send_status", [
   "failed",
 ]);
 
-import type { SchedulingIntentStored, SuggestedAction, DailyBrief } from "@/lib/schemas/domain";
+export const commitmentDirectionEnum = pgEnum("commitment_direction", ["outbound", "inbound"]);
+export const commitmentStatusEnum = pgEnum("commitment_status", [
+  "pending_confirm",
+  "open",
+  "fulfilled",
+  "dismissed",
+]);
+export const contactWarmthEnum = pgEnum("contact_warmth", ["cold", "warm", "active", "new"]);
+export const externalProviderEnum = pgEnum("external_provider", ["linear", "notion", "github"]);
+
+import type {
+  DailyBrief,
+  MeetingBriefStored,
+  SchedulingIntentStored,
+  SuggestedAction,
+} from "@/lib/schemas/domain";
 import { EMBEDDING_DIMENSIONS } from "@/lib/ai/providers";
 
 export type SchedulingIntent = SchedulingIntentStored;
@@ -196,7 +212,150 @@ export const dailyBriefs = pgTable(
   (table) => [index("daily_briefs_user_idx").on(table.userId)]
 );
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const commitments = pgTable(
+  "commitments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    messageId: text("message_id").notNull(),
+    direction: commitmentDirectionEnum("direction").notNull(),
+    text: text("text").notNull(),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    counterpartyEmail: text("counterparty_email").notNull(),
+    status: commitmentStatusEnum("status").notNull().default("open"),
+    confidence: real("confidence").notNull(),
+    extractedAt: timestamp("extracted_at", { withTimezone: true }).defaultNow().notNull(),
+    followUpDraftQueuedAt: timestamp("follow_up_draft_queued_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("commitments_user_status_idx").on(table.userId, table.status),
+    index("commitments_user_thread_idx").on(table.userId, table.threadId),
+  ]
+);
+
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    displayName: text("display_name").notNull().default(""),
+    lastContactAt: timestamp("last_contact_at", { withTimezone: true }).notNull(),
+    avgResponseHours: integer("avg_response_hours"),
+    emailCount30d: integer("email_count_30d").notNull().default(0),
+    warmth: contactWarmthEnum("warmth").notNull().default("new"),
+    openCommitmentCount: integer("open_commitment_count").notNull().default(0),
+  },
+  (table) => [
+    index("contacts_user_email_idx").on(table.userId, table.email),
+    index("contacts_user_warmth_idx").on(table.userId, table.warmth),
+  ]
+);
+
+export const emailSnippets = pgTable(
+  "email_snippets",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    body: text("body").notNull(),
+    variables: json("variables").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("email_snippets_user_idx").on(table.userId)]
+);
+
+export const userPreferences = pgTable("user_preferences", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  batchWindows: json("batch_windows").$type<string[]>().notNull().default(["09:00", "13:00", "17:00"]),
+  focusModeEnabled: boolean("focus_mode_enabled").notNull().default(true),
+  autoResponderTemplate: text("auto_responder_template")
+    .notNull()
+    .default("I check email at 9am, 1pm, and 5pm. I'll get back to you soon."),
+  followUpDaysDefault: integer("follow_up_days_default").notNull().default(5),
+  timezone: text("timezone").notNull().default("UTC"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const externalConnections = pgTable(
+  "external_connections",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: externalProviderEnum("provider").notNull(),
+    accessToken: text("access_token").notNull(),
+    teamId: text("team_id"),
+    defaultProjectId: text("default_project_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("external_connections_user_provider_idx").on(table.userId, table.provider)]
+);
+
+export const threadExternalTasks = pgTable(
+  "thread_external_tasks",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    provider: externalProviderEnum("provider").notNull(),
+    externalTaskId: text("external_task_id").notNull(),
+    url: text("url").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("thread_external_tasks_user_thread_idx").on(table.userId, table.threadId)]
+);
+
+export const focusAutoReplies = pgTable(
+  "focus_auto_replies",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    senderEmail: text("sender_email").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+    threadId: text("thread_id").notNull(),
+  },
+  (table) => [
+    index("focus_auto_replies_user_sender_day_idx").on(table.userId, table.senderEmail, table.sentAt),
+  ]
+);
+
+export const meetingBriefs = pgTable(
+  "meeting_briefs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    attendeeEmail: text("attendee_email").notNull(),
+    briefDate: text("brief_date").notNull(),
+    brief: json("brief").$type<MeetingBriefStored>().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("meeting_briefs_user_attendee_date_idx").on(
+      table.userId,
+      table.attendeeEmail,
+      table.briefDate
+    ),
+  ]
+);
+
+export const usersRelations = relations(users, ({ many, one }) => ({
   classifications: many(classifications),
   snoozes: many(snoozes),
   drafts: many(drafts),
@@ -205,6 +364,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   agentConversations: many(agentConversations),
   threadSummaries: many(threadSummaries),
   dailyBriefs: many(dailyBriefs),
+  commitments: many(commitments),
+  contacts: many(contacts),
+  emailSnippets: many(emailSnippets),
+  preferences: one(userPreferences),
+  externalConnections: many(externalConnections),
+  threadExternalTasks: many(threadExternalTasks),
+  focusAutoReplies: many(focusAutoReplies),
+  meetingBriefs: many(meetingBriefs),
 }));
 
 export const agentConversationsRelations = relations(agentConversations, ({ one, many }) => ({

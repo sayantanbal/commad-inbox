@@ -9,7 +9,7 @@ export const AI_PROVIDER_CONFIG = {
     label: "Gemini",
     chatLabel: "Gemini 2.5 Flash",
     chatModel: "gemini-2.5-flash",
-    embedModel: "text-embedding-004",
+    embedModel: "gemini-embedding-001",
     dimensions: EMBEDDING_DIMENSIONS,
   },
   openai: {
@@ -36,7 +36,7 @@ function readDefaultAiProvider(): AiProvider {
   const fromEnv =
     typeof process !== "undefined" ? process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER : undefined;
   if (fromEnv === "gemini" || fromEnv === "openai") return fromEnv;
-  return "openai";
+  return "gemini";
 }
 
 export const DEFAULT_AI_PROVIDER: AiProvider = readDefaultAiProvider();

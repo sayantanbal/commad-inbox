@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { renewWatchesForAllTenants } from "@/lib/webhooks/renew-watches";
+import { cronForceQuerySchema } from "@/lib/schemas/webhooks";
+import { parseSearchParams } from "@/lib/api/parse-query";
 
 function authorizeCron(request: Request): boolean {
   if (!env.CRON_SECRET) return false;
@@ -14,9 +16,12 @@ async function handleRenew(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const force =
-    new URL(request.url).searchParams.get("force") === "1" ||
-    new URL(request.url).searchParams.get("force") === "true";
+  const query = parseSearchParams(new URL(request.url), cronForceQuerySchema);
+  if (!query.ok) {
+    return NextResponse.json({ error: query.error }, { status: 400 });
+  }
+
+  const force = query.data.force ?? false;
 
   const results = await renewWatchesForAllTenants({ force });
 

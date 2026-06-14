@@ -244,6 +244,86 @@ export async function fetchCalendarEventsApi(month: string) {
   }>;
 }
 
+export async function fetchMailboxThreadsApi(label: "sent" | "inbox" = "inbox") {
+  const response = await fetch(`/api/inbox/threads?label=${label}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    threads: import("@/lib/inbox-serialize").SerializedThread[];
+  }>;
+}
+
+export type DailyBriefStreamEvent =
+  | { type: "status"; message: string }
+  | { type: "partial"; brief: Partial<import("@/lib/schemas/domain").DailyBrief> }
+  | {
+      type: "complete";
+      brief: import("@/lib/schemas/domain").DailyBrief;
+      provider: string;
+      source: "ai" | "cache";
+    }
+  | { type: "error"; message: string };
+
+export async function streamDailyBriefApi(
+  provider: "openai" | "gemini",
+  options: {
+    refresh?: boolean;
+    timezone?: string;
+    onEvent: (event: DailyBriefStreamEvent) => void;
+    signal?: AbortSignal;
+  }
+) {
+  const response = await fetch("/api/inbox/daily-brief", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      provider,
+      refresh: options.refresh ?? false,
+      stream: true,
+      timezone:
+        options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("Daily brief stream unavailable");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line) as DailyBriefStreamEvent;
+      options.onEvent(event);
+      if (event.type === "error") {
+        throw new Error(event.message);
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer) as DailyBriefStreamEvent;
+    options.onEvent(event);
+    if (event.type === "error") {
+      throw new Error(event.message);
+    }
+  }
+}
+
 export async function fetchDailyBriefApi(
   provider: "openai" | "gemini",
   options?: { refresh?: boolean; timezone?: string }
@@ -301,4 +381,122 @@ export async function saveAgentConversationApi(
     body: JSON.stringify({ messages }),
   });
   if (!response.ok) throw new Error(await parseError(response));
+}
+
+export interface CommitmentItem {
+  id: string;
+  threadId: string;
+  direction: "outbound" | "inbound";
+  text: string;
+  dueDate: string | null;
+  counterpartyEmail: string;
+  status: string;
+  confidence: number;
+}
+
+export async function fetchCommitmentsApi(view?: "commitments" | "waiting") {
+  const params = view ? `?view=${view === "waiting" ? "waiting" : "commitments"}` : "";
+  const response = await fetch(`/api/inbox/commitments${params}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ commitments: CommitmentItem[] }>;
+}
+
+export async function patchCommitmentApi(
+  commitmentId: string,
+  status: "fulfilled" | "dismissed" | "open"
+) {
+  const response = await fetch("/api/inbox/commitments", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commitmentId, status }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
+export async function confirmCommitmentApi(commitmentId: string) {
+  const response = await fetch("/api/inbox/commitments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commitmentId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
+export async function fetchPreBriefApi(attendeeEmail: string) {
+  const params = new URLSearchParams({ attendeeEmail });
+  const response = await fetch(`/api/inbox/pre-brief?${params}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ brief: import("@/lib/schemas/domain").MeetingBriefStored }>;
+}
+
+export async function fetchContactsApi() {
+  const response = await fetch("/api/inbox/contacts");
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    contacts: Array<{
+      id: string;
+      email: string;
+      displayName: string;
+      lastContactAt: string;
+      warmth: string;
+      openCommitmentCount: number;
+      emailCount30d: number;
+    }>;
+  }>;
+}
+
+export async function fetchPreferencesApi() {
+  const response = await fetch("/api/inbox/preferences");
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
+export async function patchPreferencesApi(patch: Record<string, unknown>) {
+  const response = await fetch("/api/inbox/preferences", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json();
+}
+
+export async function fetchSnippetsApi() {
+  const response = await fetch("/api/inbox/snippets");
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ snippets: Array<{ id: string; name: string; body: string }> }>;
+}
+
+export async function exportTaskApi(input: {
+  threadId: string;
+  title: string;
+  description: string;
+  teamId?: string;
+}) {
+  const response = await fetch("/api/inbox/export-task", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ task: { id: string; url: string } }>;
+}
+
+export async function connectLinearApi(accessToken: string, teamId?: string) {
+  const response = await fetch("/api/connect/linear", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accessToken, teamId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
+export async function fetchSendTimeSuggestionApi(counterpartyEmail: string, threadId?: string) {
+  const response = await fetch("/api/inbox/send-time", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ counterpartyEmail, threadId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ suggestion: import("@/lib/schemas/domain").SendTimeSuggestion }>;
 }

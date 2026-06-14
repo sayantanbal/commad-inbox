@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addMinutes, format } from "date-fns";
-import { Activity, Command, Keyboard, Search } from "lucide-react";
+import { Activity, Command, Keyboard, Search, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
@@ -11,8 +11,13 @@ import { ActivityBar } from "@/components/inbox/activity-bar";
 import { AgentChatPanel } from "@/components/inbox/agent-chat-panel";
 import { CalendarPanel } from "@/components/inbox/calendar-panel";
 import { DefragPanel } from "@/components/inbox/defrag-panel";
+import { CommitmentsPanel } from "@/components/inbox/commitments-panel";
+import { ExportTaskModal } from "@/components/inbox/export-task-modal";
+import { FocusModeSettings } from "@/components/inbox/focus-mode-settings";
+import { MeetingPreBriefPanel } from "@/components/inbox/meeting-pre-brief-panel";
 import { DailyBriefPanel } from "@/components/inbox/daily-brief-panel";
-import { PrimaryNav, type PrimaryView } from "@/components/inbox/primary-nav";
+import { MailboxEmptyState } from "@/components/inbox/mailbox-empty-state";
+import { PrimaryNav, type MailboxView, type PrimaryView } from "@/components/inbox/primary-nav";
 import { CommandPalette } from "@/components/inbox/command-palette";
 import { ComposerPanel } from "@/components/inbox/composer-panel";
 import { ShortcutCheatsheet } from "@/components/inbox/shortcut-cheatsheet";
@@ -22,9 +27,11 @@ import { ThreadList } from "@/components/inbox/thread-list";
 import { ThreadView } from "@/components/inbox/thread-view";
 import { UndoToast, type UndoState } from "@/components/inbox/undo-toast";
 import { Button } from "@/components/ui/button";
+import { KbdBadge } from "@/components/ui/kbd-badge";
 import { Input } from "@/components/ui/input";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ActivityItem } from "@/lib/activity";
 import { computeFreeSlots, findNearestFreeSlot, isSlotBusy } from "@/lib/calendar/free-slots";
@@ -43,6 +50,18 @@ import {
   snoozeThreadApi,
   unsnoozeThreadApi,
   updateMeetingApi,
+  connectLinearApi,
+  confirmCommitmentApi,
+  exportTaskApi,
+  fetchCommitmentsApi,
+  fetchMailboxThreadsApi,
+  fetchPreBriefApi,
+  fetchPreferencesApi,
+  fetchSendTimeSuggestionApi,
+  fetchSnippetsApi,
+  patchCommitmentApi,
+  patchPreferencesApi,
+  type CommitmentItem,
 } from "@/lib/inbox/client-api";
 import { replyRecipients, resolveMeetingAttendees } from "@/lib/inbox/recipients";
 import { summarizeRsvp } from "@/lib/inbox/rsvp";
@@ -52,8 +71,9 @@ import { useInboxRealtime } from "@/hooks/use-inbox-realtime";
 import { useInboxShortcuts } from "@/hooks/use-inbox-shortcuts";
 import { useAiProvider } from "@/hooks/use-ai-provider";
 import { useIsMobile, usePlatform } from "@/hooks/use-platform";
-import type { SuggestedAction } from "@/lib/schemas/domain";
+import type { MeetingBriefStored, SendTimeSuggestion, SuggestedAction } from "@/lib/schemas/domain";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
+import { deserializeThreads } from "@/lib/inbox-serialize";
 import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
 import type { CalendarEvent, Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
 
@@ -166,8 +186,33 @@ export function InboxShell({
   const [mobileTab, setMobileTab] = useState<MobileTab>("inbox");
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [primaryView, setPrimaryView] = useState<PrimaryView>("inbox");
+  const [mailboxView, setMailboxView] = useState<MailboxView>("inbox");
+  const [sentThreads, setSentThreads] = useState<Thread[]>([]);
+  const [mailboxLoading, setMailboxLoading] = useState(false);
   const [defragOpen, setDefragOpen] = useState(false);
   const [briefInvalidationKey, setBriefInvalidationKey] = useState(0);
+  const [commitmentsOpen, setCommitmentsOpen] = useState(false);
+  const [commitmentsView, setCommitmentsView] = useState<"commitments" | "waiting">("waiting");
+  const [commitmentsLoading, setCommitmentsLoading] = useState(false);
+  const [commitmentItems, setCommitmentItems] = useState<CommitmentItem[]>([]);
+  const [threadCommitments, setThreadCommitments] = useState<CommitmentItem[]>([]);
+  const [preBriefOpen, setPreBriefOpen] = useState(false);
+  const [preBriefLoading, setPreBriefLoading] = useState(false);
+  const [preBrief, setPreBrief] = useState<MeetingBriefStored | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [snippets, setSnippets] = useState<Array<{ id: string; name: string; body: string }>>([]);
+  const [sendTimeSuggestion, setSendTimeSuggestion] = useState<SendTimeSuggestion | null>(null);
+  const [prefs, setPrefs] = useState({
+    batchWindows: ["09:00", "13:00", "17:00"],
+    focusModeEnabled: true,
+    autoResponderTemplate: "",
+    followUpDaysDefault: 5,
+    timezone: "UTC",
+  });
+  const [linearToken, setLinearToken] = useState("");
+  const [linearTeamId, setLinearTeamId] = useState("");
   const [undo, setUndo] = useState<UndoState | null>(null);
   const { provider } = useAiProvider();
 
@@ -199,6 +244,38 @@ export function InboxShell({
       );
     });
   }, [laneThreads, threadSearch, classificationMap]);
+
+  const listThreads = useMemo(() => {
+    if (mailboxView === "sent") return sentThreads;
+    if (mailboxView === "snoozed") {
+      return liveThreads.filter((t) => snoozedIds.has(t.id));
+    }
+    if (mailboxView === "archive") {
+      return liveThreads.filter((t) => classificationMap.get(t.id)?.lane === "done");
+    }
+    return filteredLaneThreads;
+  }, [
+    mailboxView,
+    sentThreads,
+    liveThreads,
+    snoozedIds,
+    classificationMap,
+    filteredLaneThreads,
+  ]);
+
+  const filteredListThreads = useMemo(() => {
+    const q = threadSearch.trim().toLowerCase();
+    if (!q) return listThreads;
+    return listThreads.filter((t) => {
+      const c = classificationMap.get(t.id);
+      return (
+        t.subject.toLowerCase().includes(q) ||
+        t.snippet.toLowerCase().includes(q) ||
+        (c?.sender ?? "").toLowerCase().includes(q) ||
+        t.participants.some((p) => p.email.toLowerCase().includes(q))
+      );
+    });
+  }, [listThreads, threadSearch, classificationMap]);
 
   const selectedThread = liveThreads.find((t) => t.id === selectedThreadId) ?? null;
   const selectedClassification = selectedThreadId ? classificationMap.get(selectedThreadId) : undefined;
@@ -305,8 +382,11 @@ export function InboxShell({
   const handleRealtimeEvent = useCallback((event: InboxRealtimeEvent) => {
     if (event.type === "classification-updated") {
       setClassifications((prev) => mergeClassifications(prev, event.classification));
-      setBriefInvalidationKey((key) => key + 1);
-      router.refresh();
+      if (!prefs.focusModeEnabled) {
+        setBriefInvalidationKey((key) => key + 1);
+        router.refresh();
+      }
+      return;
     }
     if (event.type === "calendar-updated") {
       void loadCalendarMonth(new Date());
@@ -362,7 +442,7 @@ export function InboxShell({
       setActivities((prev) => prev.filter((a) => a.id !== "reembed"));
       router.refresh();
     }
-  }, [router, loadCalendarMonth]);
+  }, [router, loadCalendarMonth, prefs.focusModeEnabled]);
 
   const pollInbox = useCallback(() => {
     router.refresh();
@@ -373,6 +453,105 @@ export function InboxShell({
   const showUndo = useCallback((message: string, onUndo: () => void) => {
     setUndo({ message, onUndo });
   }, []);
+
+  const loadCommitments = useCallback(async (view: "commitments" | "waiting") => {
+    const data = await fetchCommitmentsApi(view);
+    setCommitmentItems(data.commitments);
+  }, []);
+
+  const loadSentThreads = useCallback(async () => {
+    setMailboxLoading(true);
+    try {
+      const { threads } = await fetchMailboxThreadsApi("sent");
+      setSentThreads(deserializeThreads(threads));
+    } catch {
+      setSentThreads([]);
+    } finally {
+      setMailboxLoading(false);
+    }
+  }, []);
+
+  const handleMailboxView = useCallback((view: MailboxView) => {
+    setCommitmentsOpen(false);
+    setPrimaryView("inbox");
+    setMailboxView(view);
+  }, []);
+
+  const openCommitments = useCallback(
+    (view: "commitments" | "waiting") => {
+      setPrimaryView("inbox");
+      setMailboxView("inbox");
+      setCommitmentsView(view);
+      setCommitmentsOpen(true);
+      setCommitmentsLoading(true);
+      void loadCommitments(view).finally(() => setCommitmentsLoading(false));
+    },
+    [loadCommitments]
+  );
+
+  const openWaitingFor = useCallback(() => {
+    openCommitments("waiting");
+  }, [openCommitments]);
+
+  useEffect(() => {
+    if (mailboxView === "sent") {
+      void loadSentThreads();
+    }
+  }, [mailboxView, loadSentThreads]);
+
+  useEffect(() => {
+    void fetchPreferencesApi()
+      .then((data) => setPrefs(data as typeof prefs))
+      .catch(() => undefined);
+    void fetchSnippetsApi()
+      .then((data) => setSnippets(data.snippets))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedThreadId) {
+      setThreadCommitments([]);
+      return;
+    }
+    void fetchCommitmentsApi()
+      .then((data) =>
+        setThreadCommitments(data.commitments.filter((c) => c.threadId === selectedThreadId))
+      )
+      .catch(() => setThreadCommitments([]));
+  }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!composerOpen || !selectedThread) {
+      setSendTimeSuggestion(null);
+      return;
+    }
+    const counterparty = selectedThread.participants.find(
+      (p) => p.email.toLowerCase() !== userEmail.toLowerCase()
+    );
+    if (!counterparty) return;
+    void fetchSendTimeSuggestionApi(counterparty.email, selectedThread.id)
+      .then((data) => setSendTimeSuggestion(data.suggestion))
+      .catch(() => setSendTimeSuggestion(null));
+  }, [composerOpen, selectedThread, userEmail]);
+
+  const openPreBrief = useCallback(() => {
+    if (!selectedThread) return;
+    const attendee = selectedThread.participants.find(
+      (p) => p.email.toLowerCase() !== userEmail.toLowerCase()
+    );
+    if (!attendee) return;
+    setPreBriefOpen(true);
+    setPreBriefLoading(true);
+    void fetchPreBriefApi(attendee.email)
+      .then((data) => setPreBrief(data.brief))
+      .catch(() => setPreBrief(null))
+      .finally(() => setPreBriefLoading(false));
+  }, [selectedThread, userEmail]);
+
+  const openExportTask = useCallback(() => {
+    if (!selectedThread) return;
+    setExportOpen(true);
+  }, [selectedThread]);
 
   const addActivity = useCallback((item: ActivityItem) => {
     setActivities((prev) => [...prev, item]);
@@ -542,6 +721,25 @@ export function InboxShell({
         case "cancelMeeting":
           void handleCancelMeeting();
           break;
+        case "waitingFor":
+          openWaitingFor();
+          break;
+        case "preBrief":
+          openPreBrief();
+          break;
+        case "exportTask":
+          openExportTask();
+          break;
+        case "fulfillCommitment": {
+          const pending = threadCommitments.find((c) => c.status === "open");
+          if (pending) {
+            void patchCommitmentApi(pending.id, "fulfilled").then(() => {
+              setThreadCommitments((prev) => prev.filter((c) => c.id !== pending.id));
+              showUndo("Commitment marked fulfilled", () => undefined);
+            });
+          }
+          break;
+        }
         default:
           break;
       }
@@ -550,10 +748,15 @@ export function InboxShell({
       archiveThread,
       handleCancelMeeting,
       navigateThread,
+      openExportTask,
+      openPreBrief,
+      openReplyComposer,
       openScheduleMeeting,
       openSnooze,
-      openReplyComposer,
+      openWaitingFor,
       selectedThreadId,
+      showUndo,
+      threadCommitments,
     ]
   );
 
@@ -819,10 +1022,10 @@ export function InboxShell({
   }, [classifications, snoozedIds]);
 
   const handleSendLater = useCallback(
-    async (bodyHtml: string) => {
+    async (bodyHtml: string, suggestedAt?: Date) => {
       if (!selectedThread || !bodyHtml.trim()) return;
 
-      const sendAt = new Date(Date.now() + 3_600_000);
+      const sendAt = suggestedAt ?? new Date(Date.now() + 3_600_000);
       const subject = selectedThread.subject.startsWith("Re:")
         ? selectedThread.subject
         : `Re: ${selectedThread.subject}`;
@@ -980,33 +1183,60 @@ export function InboxShell({
     );
 
   const renderListPanel = (touchEnabled: boolean) => (
-    <aside className="flex h-full flex-col overflow-hidden">
-      <div className="flex border-b border-border">
-        {ACTIVE_LANES.map((lane) => (
-          <button
-            key={lane}
-            type="button"
-            onClick={() => setActiveLane(lane)}
-            className={`flex-1 px-2 py-2.5 text-xs font-medium transition-colors ${
-              activeLane === lane
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {laneLabels[lane]}
-            <span className="ml-1 text-muted-foreground">({laneCounts[lane]})</span>
-          </button>
-        ))}
-      </div>
+    <aside className="relative flex h-full flex-col overflow-hidden border-r border-hairline bg-canvas">
+      {mailboxView === "inbox" && (
+        <div className="sticky top-0 z-10 flex border-b border-hairline bg-canvas">
+          {ACTIVE_LANES.map((lane) => {
+            const isActive = activeLane === lane;
+            return (
+              <button
+                key={lane}
+                type="button"
+                onClick={() => setActiveLane(lane)}
+                className={`flex-1 px-4 py-3 type-caption-strong uppercase transition-colors flex items-center justify-between ${
+                  isActive
+                    ? "text-primary"
+                    : "text-ink-muted-48 hover:text-ink-muted-80"
+                }`}
+                style={{ letterSpacing: "0.06em" }}
+              >
+                <span>{laneLabels[lane]}</span>
+                <span
+                  className={`type-fine ${
+                    isActive ? "text-primary" : "text-ink-muted-48"
+                  }`}
+                >
+                  {laneCounts[lane]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      <div className="border-b border-border px-3 py-2">
+      {mailboxView !== "inbox" && (
+        <div className="border-b border-hairline px-4 py-3">
+          <p className="type-caption-strong text-ink uppercase" style={{ letterSpacing: "0.06em" }}>
+            {mailboxView === "sent"
+              ? "Sent"
+              : mailboxView === "snoozed"
+                ? "Snoozed"
+                : "Archive"}
+          </p>
+        </div>
+      )}
+
+      <div className="border-b border-divider-soft px-4 py-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted-48"
+            strokeWidth={1.75}
+          />
           <Input
             value={threadSearch}
             onChange={(e) => setThreadSearch(e.target.value)}
             placeholder="Filter threads…"
-            className="h-8 border-border/60 bg-secondary/30 pl-8 text-xs"
+            className="h-9 rounded-full border-hairline bg-canvas pl-9 type-caption text-ink placeholder:text-ink-muted-48"
           />
         </div>
       </div>
@@ -1038,30 +1268,82 @@ export function InboxShell({
       )}
 
       <ScrollArea className="flex-1">
-        <ThreadList
-          lane={activeLane}
-          threads={filteredLaneThreads}
-          classifications={classificationMap}
-          threadMeetings={threadMeetingsMap}
-          rsvpByThread={rsvpByThread}
-          selectedThreadId={selectedThreadId}
-          multiSelectMode={multiSelectMode}
-          selectedIds={selectedIds}
-          onSelectThread={selectThread}
-          onToggleSelect={(id) => {
-            setSelectedIds((prev) => {
-              const next = new Set(prev);
-              if (next.has(id)) next.delete(id);
-              else next.add(id);
-              return next;
-            });
-          }}
-          touchEnabled={touchEnabled}
-          onArchiveThread={archiveThread}
-          onSnoozeThread={quickSnoozeThread}
-          onLongPressThread={handleLongPressThread}
-        />
+        {mailboxLoading ? (
+          <div className="space-y-2 p-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-[72px] w-full rounded-[12px]" />
+            ))}
+          </div>
+        ) : filteredListThreads.length === 0 ? (
+          <MailboxEmptyState
+            variant={
+              mailboxView === "sent"
+                ? "sent"
+                : mailboxView === "snoozed"
+                  ? "snoozed"
+                  : mailboxView === "archive"
+                    ? "archive"
+                    : "inbox-lane"
+            }
+            laneLabel={laneLabels[activeLane]}
+            onAction={() => {
+              if (mailboxView === "sent") {
+                setComposerOpen(true);
+                setComposerDraft("");
+                return;
+              }
+              handleMailboxView("inbox");
+            }}
+          />
+        ) : (
+          <ThreadList
+            lane={mailboxView === "archive" ? "done" : activeLane}
+            threads={filteredListThreads}
+            classifications={classificationMap}
+            threadMeetings={threadMeetingsMap}
+            rsvpByThread={rsvpByThread}
+            selectedThreadId={selectedThreadId}
+            multiSelectMode={multiSelectMode}
+            selectedIds={selectedIds}
+            onSelectThread={selectThread}
+            onToggleSelect={(id) => {
+              setSelectedIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              });
+            }}
+            touchEnabled={touchEnabled}
+            onArchiveThread={archiveThread}
+            onSnoozeThread={quickSnoozeThread}
+            onLongPressThread={handleLongPressThread}
+          />
+        )}
       </ScrollArea>
+      <CommitmentsPanel
+        open={commitmentsOpen}
+        title={commitmentsView === "waiting" ? "Waiting For" : "Your commitments"}
+        focusColumn={commitmentsView}
+        loading={commitmentsLoading}
+        commitments={commitmentItems}
+        onClose={() => setCommitmentsOpen(false)}
+        onBrowseInbox={() => {
+          setCommitmentsOpen(false);
+          handleMailboxView("inbox");
+        }}
+        onSelectThread={(threadId) => {
+          setCommitmentsOpen(false);
+          handleMailboxView("inbox");
+          setSelectedThreadId(threadId);
+        }}
+        onFulfill={(id) => {
+          void patchCommitmentApi(id, "fulfilled").then(() => loadCommitments(commitmentsView));
+        }}
+        onDismiss={(id) => {
+          void patchCommitmentApi(id, "dismissed").then(() => loadCommitments(commitmentsView));
+        }}
+      />
     </aside>
   );
 
@@ -1075,6 +1357,12 @@ export function InboxShell({
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <MeetingPreBriefPanel
+          open={preBriefOpen}
+          loading={preBriefLoading}
+          brief={preBrief}
+          onClose={() => setPreBriefOpen(false)}
+        />
         <ThreadView
           thread={selectedThread}
           modLabel={modLabel}
@@ -1097,6 +1385,20 @@ export function InboxShell({
           onArchive={() => selectedThreadId && archiveThread(selectedThreadId)}
           onSchedule={openScheduleMeeting}
           onSnooze={openSnooze}
+          onPreBrief={openPreBrief}
+          threadCommitments={threadCommitments}
+          onConfirmCommitment={(id) => {
+            void confirmCommitmentApi(id).then(() =>
+              setThreadCommitments((prev) =>
+                prev.map((c) => (c.id === id ? { ...c, status: "open" } : c))
+              )
+            );
+          }}
+          onDismissCommitment={(id) => {
+            void patchCommitmentApi(id, "dismissed").then(() =>
+              setThreadCommitments((prev) => prev.filter((c) => c.id !== id))
+            );
+          }}
           onCloseAvailability={() => setAvailabilityOpen(false)}
           onSelectSlot={(slot) => {
             void handleMeetingSlot(slot);
@@ -1118,6 +1420,8 @@ export function InboxShell({
         modLabel={modLabel}
         initialContent={composerDraft}
         loading={draftLoading}
+        snippets={snippets}
+        sendTimeSuggestion={sendTimeSuggestion}
         onClose={closeComposer}
         onSend={handleComposerSend}
         onToneChange={(tone) => {
@@ -1140,66 +1444,66 @@ export function InboxShell({
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background">
-        <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+        <header
+          className="flex h-11 shrink-0 items-center justify-between border-b border-hairline px-4 supports-[backdrop-filter]:bg-[color:var(--color-canvas-parchment)]/90 backdrop-blur-[20px] backdrop-saturate-[1.8] bg-parchment"
+        >
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm font-semibold tracking-tight hover:opacity-80">
-              Command<span className="text-primary">Inbox</span>
-            </Link>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="hidden text-muted-foreground/70 md:inline">
-              Drag panel edges to resize
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-[10px]"
-              onClick={() => setActivityOpen((v) => !v)}
+            <Link
+              href="/"
+              className="type-body-strong text-ink hover:opacity-80 transition-opacity"
             >
-              <Activity className="h-3.5 w-3.5" />
-              Activity
+              Command Inbox
+            </Link>
+            <span className="type-caption text-ink-muted-48 hidden md:inline">
+              {primaryView === "brief"
+                ? "/ Daily brief"
+                : primaryView === "calendar"
+                ? "/ Calendar"
+                : "/ Inbox"}
+            </span>
+          </div>
+
+          {/* Center search trigger */}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="hidden md:flex h-9 w-full max-w-[320px] items-center gap-2 rounded-full border border-hairline bg-canvas px-4 type-caption text-ink-muted-48 hover:border-[color:var(--color-primary-focus)]/40 transition-colors"
+          >
+            <Command className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <span className="flex-1 text-left">Search or jump to…</span>
+            <KbdBadge>{modLabel.replace("⌘", "⌘")}K</KbdBadge>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActivityOpen((v) => !v)}
+              className="type-caption text-ink-muted-80 hover:text-ink transition-colors px-2 py-1 flex items-center gap-1.5"
+              aria-label="Activity"
+            >
+              <Activity className="h-4 w-4" strokeWidth={1.75} />
               {activities.length > 0 && (
-                <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-medium text-primary">
+                <span className="type-fine bg-primary text-on-primary rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center">
                   {activities.length}
                 </span>
               )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-[10px]"
-              onClick={() => setPaletteOpen(true)}
-            >
-              <Command className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Commands</span>
-              <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">
-                {modLabel}K
-              </kbd>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 text-[10px]"
+            </button>
+            <button
+              type="button"
               onClick={() => setCheatsheetOpen(true)}
+              className="btn-icon-circular btn-icon-circular--sm"
+              aria-label="Keyboard shortcuts"
             >
-              <Keyboard className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Shortcuts</span>
-              <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">
-                ?
-              </kbd>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="hidden h-7 text-[10px] sm:inline-flex"
-              onClick={() => {
-                localStorage.removeItem(LAYOUT_STORAGE_KEY);
-                localStorage.removeItem(SIDEBAR_LAYOUT_STORAGE_KEY);
-                window.location.reload();
-              }}
+              <Keyboard className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="btn-icon-circular btn-icon-circular--sm"
+              aria-label="Settings"
             >
-              Reset layout
-            </Button>
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </button>
           </div>
         </header>
 
@@ -1207,8 +1511,18 @@ export function InboxShell({
         <div className="absolute inset-0 hidden lg:flex">
         <PrimaryNav
           active={primaryView}
+          mailboxView={mailboxView}
           onChange={setPrimaryView}
+          onMailboxView={handleMailboxView}
           inboxCount={laneThreads.length}
+          commitmentsOpen={commitmentsOpen}
+          commitmentsView={commitmentsView}
+          userEmail={userEmail}
+          onShortcut={(action) => {
+            if (action === "shortcuts") setCheatsheetOpen(true);
+            else if (action === "nav-commitments") openCommitments("commitments");
+            else if (action === "nav-waiting") openCommitments("waiting");
+          }}
         />
         <Group
           orientation="horizontal"
@@ -1353,6 +1667,63 @@ export function InboxShell({
           }}
         />
         <UndoToast undo={undo} onDismiss={() => setUndo(null)} />
+        <ExportTaskModal
+          open={exportOpen}
+          title={selectedThread?.subject ?? "Task from email"}
+          description={selectedThread?.snippet ?? ""}
+          loading={exportLoading}
+          onClose={() => setExportOpen(false)}
+          onExport={(title, description) => {
+            if (!selectedThreadId) return;
+            setExportLoading(true);
+            void exportTaskApi({ threadId: selectedThreadId, title, description })
+              .then((result) => {
+                setExportOpen(false);
+                showUndo(`Created Linear issue`, () => undefined);
+                window.open(result.task.url, "_blank");
+              })
+              .catch((error) =>
+                showUndo(error instanceof Error ? error.message : "Export failed", () => undefined)
+              )
+              .finally(() => setExportLoading(false));
+          }}
+        />
+        {settingsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-card">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <h2 className="text-sm font-semibold">Settings</h2>
+                <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(false)}>
+                  Close
+                </Button>
+              </div>
+              <FocusModeSettings
+                batchWindows={prefs.batchWindows}
+                focusModeEnabled={prefs.focusModeEnabled}
+                autoResponderTemplate={prefs.autoResponderTemplate}
+                onToggleFocus={(enabled) => {
+                  void patchPreferencesApi({ focusModeEnabled: enabled }).then((data) =>
+                    setPrefs(data as typeof prefs)
+                  );
+                }}
+                onUpdateTemplate={(template) => {
+                  void patchPreferencesApi({ autoResponderTemplate: template }).then((data) =>
+                    setPrefs(data as typeof prefs)
+                  );
+                }}
+                linearToken={linearToken}
+                linearTeamId={linearTeamId}
+                onLinearTokenChange={setLinearToken}
+                onLinearTeamIdChange={setLinearTeamId}
+                onSaveLinear={() => {
+                  void connectLinearApi(linearToken, linearTeamId).then(() =>
+                    showUndo("Linear connected", () => undefined)
+                  );
+                }}
+              />
+            </div>
+          </div>
+        )}
         <MobileTabBar
           active={mobileTab}
           onChange={(tab) => {

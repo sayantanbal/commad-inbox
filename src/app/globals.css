@@ -1,12 +1,26 @@
 @import "tailwindcss";
 
 /*
-  Command Inbox — light "Apple-tight" system (see DESIGN.md).
-  One brand/interactive accent: Action Blue. Status colors (red/green/amber)
-  are functional only — never decoration.
+  Command Inbox — light "Apple-tight" design system.
+
+  Rules:
+    • One brand/interactive accent: Action Blue (#0066cc).
+    • Status colors (red/green/amber) are functional only — never decoration.
+    • No shadows on chrome. No gradients. Elevation = surface color + 20px backdrop blur.
+    • Weight ladder is 300 / 400 / 600 / 700 only. Weight 500 is absent.
+    • Body copy is 17px / 400 — never 16px, never 500.
 */
+
 @theme inline {
-  /* Surfaces */
+  /* ──────────────────────── Surfaces ──────────────────────── */
+  --color-canvas: #ffffff;
+  --color-canvas-parchment: #f5f5f7;
+  --color-surface-pearl: #fafafc;
+  --color-surface-tile-1: #272729;
+  --color-surface-black: #000000;
+  --color-surface-chip: rgba(210, 210, 215, 0.64);
+
+  /* Aliases consumed by Tailwind utilities (bg-background, text-foreground, …). */
   --color-background: #ffffff;
   --color-foreground: #1d1d1f;
   --color-card: #ffffff;
@@ -14,36 +28,55 @@
   --color-popover: #ffffff;
   --color-popover-foreground: #1d1d1f;
 
-  /* Single brand accent — Action Blue */
+  /* ──────────────────────── Ink ──────────────────────── */
+  --color-ink: #1d1d1f;
+  --color-ink-muted-80: #333333;
+  --color-ink-muted-48: #7a7a7a;
+  --color-on-dark: #ffffff;
+  --color-on-primary: #ffffff;
+
+  /* ──────────────────────── Lines ──────────────────────── */
+  --color-divider-soft: #f0f0f0;
+  --color-hairline: #e0e0e0;
+  --color-border: #e0e0e0;
+  --color-input: #ffffff;
+
+  /* ──────────────────────── Brand accent ──────────────────────── */
   --color-primary: #0066cc;
+  --color-primary-focus: #0071e3;
   --color-primary-foreground: #ffffff;
+  --color-primary-on-dark: #2997ff;
+  --color-ring: #0071e3;
 
-  /* Quiet neutral surfaces (parchment / pearl) */
-  --color-secondary: #f5f5f7;
-  --color-secondary-foreground: #1d1d1f;
-  --color-muted: #f5f5f7;
-  --color-muted-foreground: #6e6e73;
-  --color-accent: #f5f5f7;
-  --color-accent-foreground: #1d1d1f;
-
-  /* Functional status — used for state, not decoration */
-  --color-destructive: #d70015;
+  /* ──────────────────────── Functional status only ──────────────────────── */
+  --color-destructive: #ff3b30;
   --color-success: #248a3d;
   --color-warning: #9a6700;
 
-  /* Hairlines */
-  --color-border: #e0e0e0;
-  --color-input: #ffffff;
-  --color-ring: #0071e3;
+  /* Aliases — some components still reference these */
+  --color-secondary: #f5f5f7;
+  --color-secondary-foreground: #1d1d1f;
+  --color-muted: #f5f5f7;
+  --color-muted-foreground: #7a7a7a;
+  --color-accent: #f5f5f7;
+  --color-accent-foreground: #1d1d1f;
 
-  /* Apple radii grammar: sm 8 · md 11 · lg 18 */
-  --radius-sm: 0.5rem;
-  --radius-md: 0.6875rem;
-  --radius-lg: 1.125rem;
+  /* ──────────────────────── Radii ──────────────────────── */
+  --radius-xs: 0.3125rem;   /* 5px  — keyboard badges */
+  --radius-sm: 0.5rem;      /* 8px  — utility action buttons */
+  --radius-md: 0.6875rem;   /* 11px — pearl capsule */
+  --radius-lg: 1.125rem;    /* 18px — utility cards */
+  --radius-pill: 9999px;
+  --radius-full: 9999px;
 
-  /* system-ui / SF Pro first (real SF Pro on Apple platforms); Inter is the cross-platform substitute. */
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono);
+  /* ──────────────────────── Spacing scale (extension, native still works) ──────── */
+  --spacing-section: 5rem;  /* 80px */
+
+  /* ──────────────────────── Fonts ──────────────────────── */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    system-ui, var(--font-inter), "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code",
+    var(--font-geist-mono), monospace;
 }
 
 @layer base {
@@ -51,21 +84,28 @@
     @apply border-border;
   }
 
+  html,
+  body {
+    height: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
     font-feature-settings: "ss03" 1, "cv01" 1, "calt" 1;
-    /* Nudge tracking to recreate the SF Pro "tight" cadence with Inter. */
+    font-size: 17px;
+    line-height: 1.47;
     letter-spacing: -0.01em;
   }
 
-  h1,
-  h2,
-  h3 {
+  h1, h2, h3, h4 {
     letter-spacing: -0.022em;
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none;
+    outline: 2px solid var(--color-primary-focus);
+    outline-offset: 2px;
   }
 
   /* Resizable panel separators — hairline that warms to blue on interaction */
@@ -74,17 +114,15 @@
     z-index: 20;
     width: 6px;
     margin: 0 -2px;
-    background: var(--color-border);
+    background: var(--color-hairline);
     transition: background 0.15s ease;
     touch-action: none;
   }
-
   [data-separator]:hover,
   [data-separator]:focus-visible,
   [data-separator]:active {
-    background: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    background: color-mix(in srgb, var(--color-primary) 55%, var(--color-hairline));
   }
-
   .resize-handle-vertical[data-separator] {
     width: 100%;
     height: 6px;
@@ -92,9 +130,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -102,24 +138,279 @@
   }
 }
 
-@layer utilities {
-  /* Parchment — the signature Apple off-white, for rhythm against pure white. */
-  .bg-parchment {
-    background-color: #f5f5f7;
+@layer components {
+  /* ──────────────────────── Typography presets ──────────────────────── */
+  /* Use these utilities everywhere instead of guessing text-sm / text-base. */
+  .type-display-lg {
+    font-size: 40px;
+    font-weight: 600;
+    line-height: 1.10;
+    letter-spacing: 0;
+  }
+  .type-display-md {
+    font-size: 34px;
+    font-weight: 600;
+    line-height: 1.20;
+    letter-spacing: -0.374px;
+  }
+  .type-tagline {
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.19;
+    letter-spacing: 0.231px;
+  }
+  .type-body-strong {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.24;
+    letter-spacing: -0.374px;
+  }
+  .type-body {
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.47;
+    letter-spacing: -0.374px;
+  }
+  .type-caption-strong {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.29;
+    letter-spacing: -0.224px;
+  }
+  .type-caption {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.43;
+    letter-spacing: -0.224px;
+  }
+  .type-fine {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.0;
+    letter-spacing: -0.12px;
+  }
+  .type-nav-link {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.0;
+    letter-spacing: -0.12px;
   }
 
+  /* ──────────────────────── Buttons ──────────────────────── */
+  /* Active scale is the single universal pressed state. */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap
+           transition-[transform,background-color,color,border-color] duration-150
+           focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50;
+    active-transform: scale(0.95);
+  }
+  .btn-base:active {
+    transform: scale(0.95);
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1;
+    padding: 11px 22px;
+    border-radius: var(--radius-pill);
+  }
+  .btn-primary:hover {
+    background: var(--color-primary-focus);
+  }
+
+  .btn-secondary-pill {
+    background: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1;
+    padding: 10px 21px;     /* -1px to absorb border */
+    border-radius: var(--radius-pill);
+  }
+  .btn-secondary-pill:hover {
+    background: rgba(0, 102, 204, 0.06);
+  }
+
+  .btn-dark-utility {
+    background: var(--color-ink);
+    color: var(--color-on-dark);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1;
+    padding: 8px 15px;
+    border-radius: var(--radius-sm);
+  }
+  .btn-dark-utility:hover {
+    background: #2a2a2c;
+  }
+
+  .btn-pearl-capsule {
+    background: var(--color-surface-pearl);
+    color: var(--color-ink-muted-80);
+    border: 1px solid var(--color-divider-soft);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1;
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+  }
+  .btn-pearl-capsule:hover {
+    background: #ffffff;
+    color: var(--color-ink);
+  }
+
+  .btn-icon-circular {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-chip);
+    color: var(--color-ink-muted-80);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-icon-circular:hover {
+    color: var(--color-ink);
+  }
+  .btn-icon-circular.btn-icon-circular--sm {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Keyboard shortcut chip — used inline in lists, nav rows, modals. */
+  .kbd-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-xs);
+    background: var(--color-surface-chip);
+    color: var(--color-ink-muted-48);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+  .kbd-badge--on-dark {
+    background: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  /* Configurator option chip — duration pickers, filter pills. */
+  .chip-option {
+    @apply inline-flex items-center gap-2;
+    background: var(--color-canvas);
+    color: var(--color-ink-muted-80);
+    border: 1px solid var(--color-hairline);
+    font-size: 14px;
+    font-weight: 400;
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    transition: border-color 120ms ease, color 120ms ease;
+  }
+  .chip-option[data-selected="true"] {
+    border-width: 2px;
+    border-color: var(--color-primary);
+    color: var(--color-ink);
+    padding: 7px 13px;
+  }
+  .chip-option:hover {
+    color: var(--color-ink);
+  }
+
+  /* Utility card — settings, contact tiles, pricing. */
+  .util-card {
+    background: var(--color-canvas);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+  }
+}
+
+@layer utilities {
+  /* Parchment — the signature Apple off-white surface. */
+  .bg-parchment {
+    background-color: var(--color-canvas-parchment);
+  }
+  /* Pearl — hover / subtle panel fill. */
+  .bg-pearl {
+    background-color: var(--color-surface-pearl);
+  }
   /* Near-black editorial tile. */
   .bg-tile-dark {
-    background-color: #1d1d1f;
+    background-color: var(--color-surface-tile-1);
+  }
+  .bg-surface-black {
+    background-color: var(--color-surface-black);
+  }
+  .bg-chip-translucent {
+    background-color: var(--color-surface-chip);
   }
 
-  /* The single drop-shadow in the system — product imagery resting on a surface. */
-  .product-shadow {
-    box-shadow: rgba(0, 0, 0, 0.22) 0 18px 60px -12px;
+  .text-ink {
+    color: var(--color-ink);
   }
-
-  /* Sky Link Blue — inline links / accents on dark tiles only. */
+  .text-ink-muted-80 {
+    color: var(--color-ink-muted-80);
+  }
+  .text-ink-muted-48 {
+    color: var(--color-ink-muted-48);
+  }
+  .text-on-dark {
+    color: var(--color-on-dark);
+  }
   .text-on-dark-link {
-    color: #2997ff;
+    color: var(--color-primary-on-dark);
+  }
+  .text-on-dark-muted {
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .border-hairline {
+    border-color: var(--color-hairline);
+  }
+  .border-divider-soft {
+    border-color: var(--color-divider-soft);
+  }
+
+  /* Selected thread row left rail */
+  .thread-selected {
+    box-shadow: inset 2px 0 0 0 var(--color-primary);
+    background: rgba(0, 102, 204, 0.06);
+  }
+  .thread-overdue {
+    box-shadow: inset 3px 0 0 0 var(--color-destructive);
+  }
+
+  /* The single drop-shadow in the system — product imagery only. */
+  .product-shadow {
+    box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px;
+  }
+
+  /* Vercel-style top loading bar */
+  .loading-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--color-primary) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: loading-shimmer 1.2s ease-in-out infinite;
+    z-index: 100;
+  }
+  @keyframes loading-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }

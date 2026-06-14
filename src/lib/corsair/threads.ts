@@ -17,12 +17,15 @@ function isAuthError(error: unknown): boolean {
 }
 
 export async function fetchThreadsForTenant(
-  tenant: ReturnType<CorsairInstance["withTenant"]>
+  tenant: ReturnType<CorsairInstance["withTenant"]>,
+  options?: { labelIds?: string[]; maxResults?: number }
 ): Promise<Thread[]> {
+  const labelIds = options?.labelIds ?? ["INBOX"];
+  const maxResults = options?.maxResults ?? THREAD_LIMIT;
   try {
     const listed = await tenant.gmail.api.threads.list({
-      maxResults: THREAD_LIMIT,
-      labelIds: ["INBOX"],
+      maxResults,
+      labelIds,
     });
 
     const threadIds =

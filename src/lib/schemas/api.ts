@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { AI_PROVIDER_IDS } from "@/lib/ai/providers";
 import { draftToneSchema, threadIdField, triageLaneSchema } from "@/lib/schemas/domain";
 
-export const aiProviderSchema = z.enum(["gemini", "openai"]);
+export const aiProviderSchema = z.enum(AI_PROVIDER_IDS);
 
 function strictObject<T extends z.ZodRawShape>(shape: T) {
   return z.object(shape).strict();
@@ -82,7 +83,18 @@ export const advancedSearchBodySchema = strictObject({
   hasAttachment: z.boolean().optional(),
   lane: triageLaneSchema.optional(),
   limit: z.number().int().min(1).max(50).default(30),
-});
+}).refine(
+  (data) =>
+    Boolean(
+      data.query?.trim() ||
+        data.sender?.trim() ||
+        data.after ||
+        data.before ||
+        data.hasAttachment !== undefined ||
+        data.lane
+    ),
+  { message: "At least one search filter is required" }
+);
 
 const uiMessagePartSchema = z
   .object({
@@ -128,4 +140,71 @@ export const focusBlockDeleteBodySchema = strictObject({
 
 export const reembedBodySchema = strictObject({
   provider: aiProviderSchema,
+});
+
+export const dailyBriefBodySchema = strictObject({
+  provider: aiProviderSchema.optional(),
+  refresh: z.boolean().optional(),
+  stream: z.boolean().optional(),
+  timezone: z.string().trim().min(1, "timezone is required").max(100).optional(),
+});
+
+/** yyyy-MM month filter for calendar events. */
+export const eventsMonthQuerySchema = z.object({
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "month must be in yyyy-MM format")
+    .optional(),
+});
+
+export const conversationIdParamSchema = z.string().trim().min(1).max(128);
+
+export const commitmentPatchBodySchema = strictObject({
+  commitmentId: z.string().min(1),
+  status: z.enum(["open", "fulfilled", "dismissed"]),
+});
+
+export const commitmentConfirmBodySchema = strictObject({
+  commitmentId: z.string().min(1),
+});
+
+export const preBriefQuerySchema = z.object({
+  attendeeEmail: z.string().email(),
+  threadId: threadIdField.optional(),
+});
+
+export const preferencesPatchBodySchema = strictObject({
+  batchWindows: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1).max(6).optional(),
+  focusModeEnabled: z.boolean().optional(),
+  autoResponderTemplate: z.string().min(1).max(500).optional(),
+  followUpDaysDefault: z.number().int().min(1).max(30).optional(),
+  timezone: z.string().min(1).max(100).optional(),
+});
+
+export const snippetBodySchema = strictObject({
+  name: z.string().min(1).max(80),
+  body: z.string().min(1).max(10000),
+});
+
+export const snippetIdBodySchema = strictObject({
+  snippetId: z.string().min(1),
+});
+
+export const exportTaskBodySchema = strictObject({
+  threadId: threadIdField,
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(10000),
+  teamId: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
+});
+
+export const sendTimeSuggestBodySchema = strictObject({
+  counterpartyEmail: z.string().email(),
+  threadId: threadIdField.optional(),
+});
+
+export const linearConnectBodySchema = strictObject({
+  accessToken: z.string().min(1),
+  teamId: z.string().min(1).optional(),
+  defaultProjectId: z.string().min(1).optional(),
 });

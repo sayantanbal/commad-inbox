@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { corsair } from "@/lib/corsair";
@@ -28,4 +29,24 @@ export async function requireConnectedTenant() {
 
 export function getTenantForUser(userId: string) {
   return corsair.withTenant(userId);
+}
+
+/** API route helper — same guarantees as requireSessionApi in require-session.ts */
+export async function requireConnectedTenantApi() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+
+  const connected = await isTenantFullyConnected(session.user.id);
+  if (!connected) {
+    return { error: NextResponse.json({ error: "Google not connected" }, { status: 403 }) };
+  }
+
+  return {
+    session,
+    userId: session.user.id,
+    userEmail: session.user.email,
+    tenant: corsair.withTenant(session.user.id),
+  };
 }

@@ -9,7 +9,7 @@ A keyboard-first Gmail + Google Calendar command center built on [Corsair](https
 - **Semantic search** (`/`) — pgvector embeddings over classified threads; provider switcher with auto re-embed
 - **Advanced search** (`Mod+Shift+F`) — Corsair Gmail API search across full mailbox history (sender, dates, lane, attachments)
 - **Hero workflow** (`M`) — inline availability → calendar invite + confirmation draft
-- **Agent chat** — Corsair MCP tools with approval UI for `run_script` actions
+- **Agent chat** — Corsair MCP discovery tools + approval-gated `send_email` / `create_calendar_invite`
 - **Command palette & shortcuts** — Superhuman-style keys; PWA + mobile tabs
 
 ## Architecture
@@ -50,7 +50,7 @@ flowchart LR
     ui --> vectors
 ```
 
-**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair cache → classify + embed → Pusher → UI. Reads use Corsair cache in Postgres, not live Google API calls.
+**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair processes event → AI classify + pgvector embed → Pusher → UI. Inbox reads go through the **Corsair SDK** (`tenant.gmail.api.*`, `tenant.googlecalendar.api.*`), which handles OAuth and caches mail in Postgres. App-owned tables store lanes, snoozes, meetings, and embeddings for sub-second semantic search over classified threads.
 
 ## Stack
 
@@ -68,7 +68,7 @@ flowchart LR
 ### 1. Clone & install
 
 ```bash
-git clone <repo-url> commad-inbox
+git clone https://github.com/sayantanbal/commad-inbox.git
 cd commad-inbox
 bun install
 ```
@@ -143,12 +143,14 @@ Run locally: `bun run docs:dev` → [http://localhost:3001](http://localhost:300
 
 ## Corsair features used
 
-- Gmail + Google Calendar plugins (embedded SDK, multi-tenant)
-- Webhook-driven cache sync
-- MCP adapter (`list_operations`, `get_schema`, `run_script`) for agent chat
-- Gmail `threads.list` for advanced search
+- **Embedded SDK** — multi-tenant Postgres + KEK, Gmail + Google Calendar plugins
+- **OAuth connect** — `/api/connect/google`, callback at `/api/auth/callback/corsair`
+- **Webhooks** — `processWebhook` on `/api/webhooks?tenantId=…` for Gmail + Calendar push
+- **Gmail API via Corsair** — threads list/get, send, modify (archive/restore), advanced search
+- **Calendar API via Corsair** — events create/update/delete with Meet links
+- **MCP adapter** — `list_operations`, `get_schema` for agent discovery; write actions use typed tools with user approval
 
-## Bonus rubric checklist
+## Bonus tasks attempted
 
 | Bonus task | Status |
 |------------|--------|
@@ -180,7 +182,19 @@ Quick checklist:
 
 ## Google OAuth testing mode
 
-Keep the OAuth app in **Testing** and add judge emails as test users. Document test user emails in your demo notes.
+Keep the OAuth app in **Testing** and add judge emails as test users. See **[docs/judge-oauth.md](docs/judge-oauth.md)** for the checklist.
+
+## Hackathon submission
+
+Full checklist: **[docs/submission.md](docs/submission.md)**
+
+| Deliverable | Link |
+|-------------|------|
+| GitHub | https://github.com/sayantanbal/commad-inbox |
+| Live app | https://command-inbox.sayantanbal.in |
+| Demo video | _add URL before submit_ |
+| X post | _add URL before submit_ |
+| LinkedIn post | _add URL before submit_ |
 
 ## Demo video
 
@@ -191,7 +205,7 @@ Script with timestamps: **[docs/demo-script.md](docs/demo-script.md)**
 1. **Problem** — scheduling email = 10+ clicks across Gmail + Calendar  
 2. **Triage** — show Reply / Schedule / FYI lanes updating live via webhook  
 3. **Hero** — open thread → `M` → pick slot → invite + draft  
-4. **Agent** — *"Send a calendar invite to friend@corsair.dev at 9 AM next Thursday…"* → approve scripts  
+4. **Agent** — *"Send a calendar invite to friend@corsair.dev at 9 AM next Thursday…"* → approve email + invite previews  
 5. **Search** — `/` semantic + `Mod+Shift+F` advanced filter by sender  
 6. **Stack** — Corsair, pgvector, Vercel AI SDK, keyboard UX
 
@@ -206,4 +220,4 @@ Script with timestamps: **[docs/demo-script.md](docs/demo-script.md)**
 
 ## License
 
-Private — hackathon / demo project.
+[MIT](LICENSE) — open source.

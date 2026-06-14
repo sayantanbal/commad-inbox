@@ -22,10 +22,13 @@ export async function getCachedThreadSummary(
 
     if (!row || row.messageCount !== messageCount) return null;
 
-    return {
+    const parsed = aiSummarySchema.safeParse({
       bullets: row.bullets,
       actions: row.actions,
-    };
+    });
+    if (!parsed.success) return null;
+
+    return parsed.data;
   } catch {
     return null;
   }

@@ -18,13 +18,16 @@ export async function embedWithProvider(
     const { embedding } = await embed({
       model,
       value: text,
-      ...(activeProvider === "openai"
-        ? {
-            providerOptions: {
+      providerOptions:
+        activeProvider === "openai"
+          ? {
               openai: { dimensions: AI_PROVIDER_CONFIG.openai.dimensions },
+            }
+          : {
+              google: {
+                outputDimensionality: AI_PROVIDER_CONFIG.gemini.dimensions,
+              },
             },
-          }
-        : {}),
     });
 
     if (!embedding.length) {

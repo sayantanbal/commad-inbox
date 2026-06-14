@@ -66,7 +66,7 @@ https://your-app.vercel.app/api/auth/callback/google
 https://your-app.vercel.app/api/auth/callback/corsair
 ```
 
-Add judge emails as **Test users** while the app stays in Testing mode.
+Add judge emails as **Test users** while the app stays in Testing mode. See **[judge-oauth.md](./judge-oauth.md)** for a copy-paste checklist.
 
 ## 4. Gmail Pub/Sub (production webhooks)
 
@@ -93,6 +93,15 @@ Vercel Hobby cron is daily-only. Use an external pinger every **1 minute**:
 **Upstash QStash** works similarly if you prefer a queue.
 
 ## 6. Post-deploy smoke test
+
+Run locally before deploy:
+
+```bash
+bun run build
+bun test
+```
+
+Live checklist:
 
 1. Open `https://your-app.vercel.app/sign-in` → Google sign-in
 2. Connect Gmail + Calendar on `/onboarding/connect`

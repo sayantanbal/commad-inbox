@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { AI_PROVIDER_IDS } from "@/lib/ai/providers";
 
 /** Treat unset or blank env values as undefined for optional vars. */
 function optionalNonEmpty() {
@@ -49,7 +50,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: optionalNonEmpty(),
 
   /** Default AI provider when user has no saved preference (openai | gemini) */
-  DEFAULT_AI_PROVIDER: z.enum(["openai", "gemini"]).optional(),
+  DEFAULT_AI_PROVIDER: z.enum(AI_PROVIDER_IDS).optional(),
 
   /** Gmail Pub/Sub topic for push notifications (projects/…/topics/…) */
   GMAIL_PUBSUB_TOPIC: optionalNonEmpty(),

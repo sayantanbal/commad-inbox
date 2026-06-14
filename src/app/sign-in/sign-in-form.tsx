@@ -18,20 +18,26 @@ export function SignInForm() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 text-center shadow-[0_12px_48px_-16px_rgba(0,0,0,0.18)]">
-      <p className="text-[15px] font-semibold tracking-tight text-primary">Command Inbox</p>
-      <h1 className="mt-3 text-2xl font-semibold tracking-[-0.022em]">Sign in to continue</h1>
-      <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
-        Connect your Google account to load real Gmail threads and calendar events.
+    <div className="util-card w-full max-w-[480px] text-center" style={{ padding: 32 }}>
+      <p
+        className="type-caption-strong text-primary uppercase"
+        style={{ letterSpacing: "0.08em" }}
+      >
+        Command Inbox
+      </p>
+      <h1 className="mt-4 type-display-md text-ink">Sign in to continue</h1>
+      <p className="mt-3 type-body text-ink-muted-48">
+        Connect your Google account to load real Gmail threads and calendar
+        events.
       </p>
 
-      <Button size="lg" className="mt-8 w-full gap-2" onClick={handleGoogleSignIn}>
+      <Button size="lg" className="mt-8 w-full" onClick={handleGoogleSignIn}>
         Continue with Google
-        <ArrowRight className="h-4 w-4" />
+        <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
       </Button>
 
-      <p className="mt-6 text-xs text-muted-foreground">
-        <Link href="/" className="underline-offset-4 hover:underline">
+      <p className="mt-6 type-caption text-ink-muted-48">
+        <Link href="/" className="hover:text-ink transition-colors">
           Back to home
         </Link>
       </p>

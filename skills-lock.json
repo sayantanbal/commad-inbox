@@ -43,6 +43,12 @@
       "skillPath": "skills/next-best-practices/SKILL.md",
       "computedHash": "f4678aef4ffc10a5ea64a91e57abe5a5081af813b06d58d565caf3e8ef56e26c"
     },
+    "senior-fullstack": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/senior-fullstack/SKILL.md",
+      "computedHash": "b04afaf3648fd6d1d031c3afca2a22a6e68eac06a66098e34bf5654bd16dd7ca"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

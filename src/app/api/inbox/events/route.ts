@@ -1,16 +1,32 @@
 import { format, parse } from "date-fns";
 import { NextResponse } from "next/server";
+import { parseSearchParams } from "@/lib/api/parse-query";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { fetchEventsForTenant } from "@/lib/corsair/events";
+import { eventsMonthQuerySchema } from "@/lib/schemas/api";
 
 export async function GET(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const monthParam = new URL(request.url).searchParams.get("month");
+  const url = new URL(request.url);
+  const query = parseSearchParams(url, eventsMonthQuerySchema);
+  if (!query.ok) {
+    return NextResponse.json(
+      {
+        error: query.error,
+        issues: query.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+      { status: 400 }
+    );
+  }
+
   let anchor = new Date();
-  if (monthParam) {
-    const parsed = parse(`${monthParam}-01`, "yyyy-MM-dd", new Date());
+  if (query.data.month) {
+    const parsed = parse(`${query.data.month}-01`, "yyyy-MM-dd", new Date());
     if (!Number.isNaN(parsed.getTime())) {
       anchor = parsed;
     }

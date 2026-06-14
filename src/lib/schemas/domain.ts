@@ -89,7 +89,75 @@ export const dailyBriefSchema = z
 export type DailyBrief = z.infer<typeof dailyBriefSchema>;
 export type DailyBriefItem = z.infer<typeof dailyBriefItemSchema>;
 
-/** Gemini classifier JSON output. */
+export const COMMITMENT_DIRECTIONS = ["outbound", "inbound"] as const;
+export type CommitmentDirection = (typeof COMMITMENT_DIRECTIONS)[number];
+export const commitmentDirectionSchema = z.enum(COMMITMENT_DIRECTIONS);
+
+export const COMMITMENT_STATUSES = [
+  "pending_confirm",
+  "open",
+  "fulfilled",
+  "dismissed",
+] as const;
+export type CommitmentStatus = (typeof COMMITMENT_STATUSES)[number];
+export const commitmentStatusSchema = z.enum(COMMITMENT_STATUSES);
+
+export const extractedCommitmentSchema = z
+  .object({
+    text: z.string().min(1),
+    direction: commitmentDirectionSchema,
+    counterpartyEmail: z.string().email(),
+    dueDate: z.string().datetime().nullable(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
+export type ExtractedCommitment = z.infer<typeof extractedCommitmentSchema>;
+
+export const commitmentExtractionResultSchema = z
+  .object({
+    commitments: z.array(extractedCommitmentSchema).max(3),
+  })
+  .strict();
+
+export type CommitmentExtractionResult = z.infer<typeof commitmentExtractionResultSchema>;
+
+export const CONTACT_WARMTH = ["cold", "warm", "active", "new"] as const;
+export type ContactWarmth = (typeof CONTACT_WARMTH)[number];
+export const contactWarmthSchema = z.enum(CONTACT_WARMTH);
+
+export const meetingBriefThreadSchema = z
+  .object({
+    subject: z.string(),
+    snippet: z.string(),
+    date: z.string(),
+  })
+  .strict();
+
+export const meetingBriefStoredSchema = z
+  .object({
+    attendeeName: z.string(),
+    attendeeEmail: z.string().email(),
+    recentThreads: z.array(meetingBriefThreadSchema).max(3),
+    openCommitments: z.array(z.string()).max(5),
+    attachmentsNote: z.string(),
+    toneSummary: z.string(),
+  })
+  .strict();
+
+export type MeetingBriefStored = z.infer<typeof meetingBriefStoredSchema>;
+
+export const sendTimeSuggestionSchema = z
+  .object({
+    suggestedAt: z.string().datetime(),
+    reason: z.string().min(1),
+    confidence: z.enum(["high", "medium", "low"]),
+  })
+  .strict();
+
+export type SendTimeSuggestion = z.infer<typeof sendTimeSuggestionSchema>;
+
+/** Stored / validated classifier result (schedulingIntent may be null). */
 export const classificationResultSchema = z
   .object({
     priority: prioritySchema,
@@ -99,6 +167,37 @@ export const classificationResultSchema = z
   .strict();
 
 export type ClassificationResult = z.infer<typeof classificationResultSchema>;
+
+/**
+ * Schema sent to structured-output APIs (OpenAI Responses, Gemini).
+ * Must use explicit types only — z.unknown() and .nullable() break OpenAI's
+ * JSON-schema validator (anyOf branch missing `type`).
+ * Omit schedulingIntent when there is no meeting intent.
+ */
+export const classificationAiOutputSchema = z
+  .object({
+    priority: prioritySchema,
+    lane: triageLaneSchema,
+    schedulingIntent: schedulingIntentStoredSchema.optional(),
+  })
+  .strict();
+
+export type ClassificationAiOutput = z.infer<typeof classificationAiOutputSchema>;
+
+export function sanitizeClassificationResult(
+  data: ClassificationAiOutput
+): ClassificationResult {
+  if (data.schedulingIntent == null) {
+    return { priority: data.priority, lane: data.lane, schedulingIntent: null };
+  }
+
+  const parsed = schedulingIntentStoredSchema.safeParse(data.schedulingIntent);
+  return {
+    priority: data.priority,
+    lane: data.lane,
+    schedulingIntent: parsed.success ? parsed.data : null,
+  };
+}
 
 export const DEFAULT_CLASSIFICATION_RESULT: ClassificationResult = {
   priority: "medium",

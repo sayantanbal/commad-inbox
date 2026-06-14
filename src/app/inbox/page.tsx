@@ -8,7 +8,11 @@ import {
   withDefaultClassifications,
   getClassificationsForUser,
 } from "@/lib/corsair/classifications";
-import { triggerInboxBackfill } from "@/lib/backfill/inbox-backfill";
+import {
+  needsClassificationBoost,
+  triggerInboxBackfill,
+  triggerInboxReclassify,
+} from "@/lib/backfill/inbox-backfill";
 import { isBackfillComplete } from "@/lib/users/backfill-status";
 import { fetchEventsForTenant } from "@/lib/corsair/events";
 import { fetchThreadsForTenant } from "@/lib/corsair/threads";
@@ -50,9 +54,14 @@ export default async function InboxPage() {
 
     if (!backfillComplete) {
       triggerInboxBackfill(userId);
+    } else if (needsClassificationBoost(storedClassifications.length, threads.length)) {
+      triggerInboxReclassify(userId);
     }
 
-    const classifications = withDefaultClassifications(threads, storedClassifications);
+    const meetingThreadIds = new Set(threadMeetings.map((meeting) => meeting.threadId));
+    const classifications = withDefaultClassifications(threads, storedClassifications, {
+      meetingThreadIds,
+    });
     const data = serializeInboxData({ threads, classifications, events, threadMeetings });
 
     return (

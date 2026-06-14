@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { dailyBriefs } from "@/lib/db/schema";
-import type { DailyBrief } from "@/lib/schemas/domain";
+import { dailyBriefSchema, type DailyBrief } from "@/lib/schemas/domain";
 import type { AiProvider } from "@/lib/ai/providers";
 import type { CalendarEvent, Classification, Thread } from "@/lib/types";
 
@@ -38,8 +38,11 @@ export async function getCachedDailyBrief(
 
     if (!row || row.sourceHash !== sourceHash) return null;
 
+    const parsed = dailyBriefSchema.safeParse(row.brief);
+    if (!parsed.success) return null;
+
     return {
-      brief: row.brief,
+      brief: parsed.data,
       provider: row.provider,
     };
   } catch {

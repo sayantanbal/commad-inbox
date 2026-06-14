@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { InboxShellSkeleton } from "@/components/inbox/inbox-shell-skeleton";
 import { deserializeInboxData, type SerializedInboxData } from "@/lib/inbox-serialize";
 
 const InboxShell = dynamic(
@@ -8,9 +9,7 @@ const InboxShell = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-screen items-center justify-center bg-background text-sm text-muted-foreground">
-        Loading inbox…
-      </div>
+      <InboxShellSkeleton message="Preparing your workspace…" />
     ),
   }
 );

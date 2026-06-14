@@ -2,13 +2,19 @@
 
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { CheckSquare, Square } from "lucide-react";
+import { Archive, CheckSquare, Clock, Square } from "lucide-react";
 import { PriorityBadge } from "@/components/inbox/priority-badge";
 import { RsvpChip } from "@/components/inbox/rsvp-chip";
 import { SwipeableThreadRow } from "@/components/inbox/swipeable-thread-row";
+import { KbdSequence } from "@/components/ui/kbd-badge";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { RsvpSummary } from "@/lib/inbox/rsvp";
-import type { Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
+import type {
+  Classification,
+  Thread,
+  ThreadMeeting,
+  TriageLane,
+} from "@/lib/types";
 
 const laneLabels: Record<TriageLane, string> = {
   reply: "Reply",
@@ -52,11 +58,13 @@ export function ThreadList({
 }: ThreadListProps) {
   if (threads.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-        <p className="text-sm text-muted-foreground">No threads in {laneLabels[lane]}</p>
-        <p className="text-xs text-muted-foreground/70">
-          Press <kbd className="rounded border border-border px-1.5 py-0.5 font-mono">J</kbd> /{" "}
-          <kbd className="rounded border border-border px-1.5 py-0.5 font-mono">K</kbd> to navigate
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="type-body text-ink">
+          Nothing in {laneLabels[lane]}. Everything&rsquo;s in play.
+        </p>
+        <p className="type-caption text-ink-muted-48 flex items-center justify-center gap-2">
+          Move with
+          <KbdSequence keys={["J", "K"]} />
         </p>
       </div>
     );
@@ -70,86 +78,127 @@ export function ThreadList({
         const rsvp = rsvpByThread.get(thread.id);
         const isSelected = selectedThreadId === thread.id;
         const isChecked = selectedIds.has(thread.id);
-        const sender = classification?.sender ?? thread.participants[0]?.name ?? "Unknown";
+        const sender =
+          classification?.sender ?? thread.participants[0]?.name ?? "Unknown";
         const timeLabel = formatRelativeTime(thread.timestamp);
+        const meetingTime = meeting ? format(meeting.start, "EEE h:mm a") : null;
 
         const row = (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.03, duration: 0.2 }}
+            transition={{ delay: index * 0.02, duration: 0.2 }}
             className={cn(
-              "group grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-2 border-b border-border/60 px-3 py-2.5 text-left transition-colors",
-              multiSelectMode && "grid-cols-[auto_minmax(0,1fr)_auto]",
-              isSelected && !multiSelectMode && "bg-accent/80",
-              !isSelected && "hover:bg-accent/40"
+              "group relative flex w-full items-start gap-3 border-b border-divider-soft px-4 py-3 text-left transition-colors",
+              "min-h-[72px]",
+              isSelected && !multiSelectMode
+                ? "thread-selected"
+                : "hover:bg-pearl"
             )}
           >
             {multiSelectMode && (
-              <span className="col-start-1 row-span-2 self-center text-muted-foreground">
+              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-ink-muted-48">
                 {isChecked ? (
-                  <CheckSquare className="h-4 w-4 text-primary" />
+                  <CheckSquare className="h-4 w-4 text-primary" strokeWidth={1.75} />
                 ) : (
-                  <Square className="h-4 w-4" />
+                  <Square className="h-4 w-4" strokeWidth={1.75} />
                 )}
               </span>
             )}
 
-            <div
-              className={cn(
-                "flex min-w-0 items-center gap-1.5",
-                multiSelectMode ? "col-start-2 row-start-1" : "col-start-1 row-start-1"
-              )}
-            >
-              {thread.unread && (
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-              )}
-              <span
-                className={cn(
-                  "min-w-0 truncate text-sm",
-                  thread.unread ? "font-semibold" : "font-medium"
+            {/* Unread indicator + main content */}
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              {/* Row 1: sender + timestamp */}
+              <div className="flex items-baseline gap-2">
+                {thread.unread && (
+                  <span
+                    className="mt-[5px] h-2 w-2 shrink-0 rounded-full bg-primary"
+                    aria-hidden
+                  />
                 )}
-                title={sender}
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    thread.unread ? "type-body-strong text-ink" : "type-body text-ink"
+                  )}
+                  title={sender}
+                >
+                  {sender}
+                </span>
+                <time
+                  className="flex-shrink-0 type-fine text-ink-muted-48"
+                  dateTime={thread.timestamp.toISOString()}
+                >
+                  {timeLabel}
+                </time>
+              </div>
+
+              {/* Row 2: subject */}
+              <p
+                className={cn(
+                  "type-caption truncate",
+                  thread.unread ? "text-ink" : "text-ink-muted-80"
+                )}
+                title={thread.subject}
               >
-                {sender}
-              </span>
+                {thread.subject}
+              </p>
+
+              {/* Row 3: preview snippet */}
+              {thread.snippet && (
+                <p className="type-caption text-ink-muted-48 truncate">
+                  {thread.snippet}
+                </p>
+              )}
+
+              {/* Metadata chips */}
+              {(classification || meetingTime || rsvp) && (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  {classification && <PriorityBadge priority={classification.priority} />}
+                  {meetingTime && (
+                    <span className="type-fine text-ink-muted-48 inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" strokeWidth={1.75} />
+                      {meetingTime}
+                    </span>
+                  )}
+                  {rsvp && <RsvpChip summary={rsvp} />}
+                </div>
+              )}
             </div>
 
-            <time
-              className={cn(
-                "shrink-0 self-start text-[10px] leading-5 text-muted-foreground",
-                multiSelectMode ? "col-start-3 row-start-1" : "col-start-2 row-start-1"
-              )}
-              dateTime={thread.timestamp.toISOString()}
-            >
-              {timeLabel}
-            </time>
-
-            <p
-              className={cn(
-                "min-w-0 truncate text-sm",
-                multiSelectMode ? "col-span-2 col-start-2 row-start-2" : "col-span-2 col-start-1 row-start-2",
-                thread.unread ? "text-foreground" : "text-muted-foreground"
-              )}
-              title={thread.subject}
-            >
-              {thread.subject}
-            </p>
-
-            {classification && (
+            {/* Hover action buttons */}
+            {!multiSelectMode && (
               <div
                 className={cn(
-                  "mt-0.5 flex flex-wrap items-center gap-1.5",
-                  multiSelectMode ? "col-span-2 col-start-2 row-start-3" : "col-span-2 col-start-1 row-start-3"
+                  "absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5",
+                  "opacity-0 group-hover:opacity-100 transition-opacity",
+                  "pointer-events-none group-hover:pointer-events-auto"
                 )}
               >
-                <PriorityBadge priority={classification.priority} />
-                {meeting && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {format(meeting.start, "EEE h:mm a")}
-                  </span>
-                )}
-                {rsvp && <RsvpChip summary={rsvp} />}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchiveThread?.(thread.id);
+                  }}
+                  className="btn-icon-circular btn-icon-circular--sm"
+                  aria-label="Archive (E)"
+                  title="Archive — E"
+                >
+                  <Archive className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSnoozeThread?.(thread.id);
+                  }}
+                  className="btn-icon-circular btn-icon-circular--sm"
+                  aria-label="Snooze (S)"
+                  title="Snooze — S"
+                >
+                  <Clock className="h-4 w-4" strokeWidth={1.75} />
+                </button>
               </div>
             )}
           </motion.div>
@@ -172,7 +221,12 @@ export function ThreadList({
         return (
           <div
             key={thread.id}
-            onClick={() => (multiSelectMode ? onToggleSelect(thread.id) : onSelectThread(thread.id))}
+            onClick={() =>
+              multiSelectMode
+                ? onToggleSelect(thread.id)
+                : onSelectThread(thread.id)
+            }
+            className="cursor-pointer"
           >
             {row}
           </div>

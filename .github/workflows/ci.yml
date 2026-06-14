@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Unit tests
+        run: bun test src/lib/__tests__
+
+      - name: Production build
+        run: bun run build
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          CORSAIR_KEK: dGVzdC1rZWstdmFsdWUtZm9yLWNpLW9ubHk=
+          GOOGLE_CLIENT_ID: ci-client-id.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: ci-client-secret
+          BETTER_AUTH_SECRET: dGVzdC1hdXRoLXNlY3JldC1mb3ItY2k=
+          BETTER_AUTH_URL: http://localhost:3000
+          APP_URL: http://localhost:3000

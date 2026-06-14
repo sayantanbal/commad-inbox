@@ -1,3 +1,5 @@
+import { parseGoogleWatchResponse } from "@/lib/schemas/webhooks";
+
 export async function registerGmailWatch(
   accessToken: string,
   topicName: string
@@ -19,9 +21,8 @@ export async function registerGmailWatch(
     throw new Error(`Gmail watch failed (${response.status}): ${body}`);
   }
 
-  const parsed = JSON.parse(body) as { expiration?: string };
-  const expiration = parsed.expiration ? new Date(Number(parsed.expiration)) : null;
-  return { expiration: Number.isNaN(expiration?.getTime() ?? NaN) ? null : expiration, raw: parsed };
+  const parsed = parseGoogleWatchResponse(body);
+  return { expiration: parsed.expiration, raw: parsed.raw };
 }
 
 export async function registerCalendarWatch(
@@ -51,7 +52,6 @@ export async function registerCalendarWatch(
     throw new Error(`Calendar watch failed (${response.status}): ${body}`);
   }
 
-  const parsed = JSON.parse(body) as { expiration?: string };
-  const expiration = parsed.expiration ? new Date(Number(parsed.expiration)) : null;
-  return { expiration: Number.isNaN(expiration?.getTime() ?? NaN) ? null : expiration, raw: parsed };
+  const parsed = parseGoogleWatchResponse(body);
+  return { expiration: parsed.expiration, raw: parsed.raw };
 }

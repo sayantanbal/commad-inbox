@@ -44,6 +44,7 @@ Builder Mode On | MacBook Giveaway Hackathon
 
 ## Before posting
 
-- [ ] Replace placeholder repo / demo URL with production Vercel link
+- [ ] Live app: https://command-inbox.sayantanbal.in
+- [ ] GitHub: https://github.com/sayantanbal/commad-inbox
 - [ ] Attach 30–60s screen recording (see [demo-script.md](./demo-script.md))
-- [ ] Confirm judge emails added as Google OAuth test users
+- [ ] Confirm judge emails added as Google OAuth test users ([judge-oauth.md](./judge-oauth.md))

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 
+export type ParseJsonBodyOptions = {
+  /** Treat an empty request body as `{}` instead of rejecting it. */
+  allowEmpty?: boolean;
+};
+
 export type ParseJsonBodyResult<T> =
   | { ok: true; data: T }
   | { ok: false; response: NextResponse };
@@ -23,11 +28,25 @@ function validationErrorResponse(error: z.ZodError): NextResponse {
  */
 export async function parseJsonBody<T extends z.ZodType>(
   request: Request,
-  schema: T
+  schema: T,
+  options?: ParseJsonBodyOptions
 ): Promise<ParseJsonBodyResult<z.infer<T>>> {
   let json: unknown;
+
   try {
-    json = await request.json();
+    const text = await request.text();
+    if (!text.trim()) {
+      if (options?.allowEmpty) {
+        json = {};
+      } else {
+        return {
+          ok: false,
+          response: NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }),
+        };
+      }
+    } else {
+      json = JSON.parse(text) as unknown;
+    }
   } catch {
     return {
       ok: false,

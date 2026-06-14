@@ -116,42 +116,71 @@ export function InlineAvailabilityPicker({
 
   if (!open) return null;
 
-  const title = mode === "reschedule" ? "Reschedule meeting" : isManualMode ? "Pick a time" : "Schedule meeting";
+  const title =
+    mode === "reschedule"
+      ? "Reschedule meeting"
+      : isManualMode
+      ? "Pick a time"
+      : "Schedule a meeting";
 
   return (
     <section
-      className="border-b border-border bg-card/80 px-4 py-3"
+      className="border-b border-hairline bg-canvas px-6 py-5"
       aria-label="Availability picker"
     >
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <Calendar className="h-4 w-4 text-primary" />
+          <p className="type-tagline text-ink flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" strokeWidth={1.75} />
             {title}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-2 type-caption text-ink-muted-48 max-w-md">
             {isManualMode
-              ? `Choose a free slot (${duration} min). Busy times are checked against your calendar.`
-              : "Proposed times from the email are checked against your calendar. ↑↓ navigate · Enter confirm · Esc close."}
+              ? `Choose a free ${duration}-minute slot. Busy times come straight from Calendar.`
+              : "Times proposed by the email, validated against your calendar."}
           </p>
         </div>
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onClose}>
-          Close
-        </Button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn-icon-circular btn-icon-circular--sm"
+          aria-label="Close availability picker"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Duration chips (read-only display of effective duration) */}
+      <div className="mb-4 flex items-center gap-2">
+        {[30, 45, 60].map((d) => (
+          <span
+            key={d}
+            className="chip-option"
+            data-selected={duration === d ? "true" : "false"}
+          >
+            {d} min
+          </span>
+        ))}
+        <span className="type-caption text-ink-muted-48 ml-2">
+          ↑↓ navigate · ↵ confirm · Esc close
+        </span>
       </div>
 
       {conflictHint && (
-        <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="mb-4 flex items-start gap-2 rounded-[8px] border border-[color:var(--color-warning)]/30 bg-[#fff7e6] px-3 py-2 type-caption text-[color:var(--color-warning)]">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
           {conflictHint}
         </div>
       )}
 
       {attendees.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <Users className="h-3.5 w-3.5" />
+        <div className="mb-4 flex flex-wrap items-center gap-1.5 type-caption text-ink-muted-48">
+          <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
           {attendees.map((email) => (
-            <span key={email} className="rounded-md border border-border px-1.5 py-0.5">
+            <span
+              key={email}
+              className="rounded-full border border-hairline px-2 py-0.5 type-fine"
+            >
               {email}
             </span>
           ))}
@@ -159,8 +188,8 @@ export function InlineAvailabilityPicker({
       )}
 
       {!isManualMode && proposedSlots.length > 0 && (
-        <div className="mb-3 space-y-2">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="mb-4 space-y-2">
+          <p className="type-caption-strong uppercase text-ink-muted-48" style={{ letterSpacing: "0.06em" }}>
             From email
           </p>
           <div className="flex flex-wrap gap-2">
@@ -173,14 +202,18 @@ export function InlineAvailabilityPicker({
               return (
                 <Button
                   key={slot.toISOString()}
-                  variant={busy ? "outline" : "default"}
-                  size="sm"
+                  variant={busy ? "pearl-capsule" : "default"}
+                  size="xs"
                   onClick={() => handleSlotSelect(slot)}
-                  className={cn("gap-1.5", index === highlightIndex && "ring-2 ring-ring", busy && "border-amber-500/40")}
+                  className={cn(
+                    index === highlightIndex && "ring-2 ring-[color:var(--color-primary-focus)]"
+                  )}
                 >
-                  <Clock className="h-3 w-3" />
+                  <Clock className="h-3 w-3" strokeWidth={1.75} />
                   {format(slot, "EEE h:mm a")}
-                  {busy && <span className="text-[10px] opacity-70">· busy</span>}
+                  {busy && (
+                    <span className="type-fine text-ink-muted-48 ml-1">· busy</span>
+                  )}
                 </Button>
               );
             })}
@@ -189,19 +222,22 @@ export function InlineAvailabilityPicker({
       )}
 
       <div className="space-y-2">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <p className="type-caption-strong uppercase text-ink-muted-48" style={{ letterSpacing: "0.06em" }}>
           {isManualMode ? "Your availability" : "Your free slots"}
         </p>
         {slotOptions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No open slots in the next two weeks.</p>
+          <p className="type-body text-ink-muted-48">
+            No open slots in the next two weeks.
+          </p>
         ) : (
-          <div className="grid gap-1 sm:grid-cols-2">
+          <div className="grid gap-1.5 sm:grid-cols-2">
             {slotOptions.map((slot, index) => {
               const end = addMinutes(slot, duration);
               const busy = isSlotBusy(calendarEvents, slot, end, excludeEventId);
               const fromEmail = proposedSlots.some(
                 (proposed) => proposed.toISOString() === slot.toISOString()
               );
+              const isHighlight = index === highlightIndex;
               return (
                 <button
                   key={slot.toISOString()}
@@ -209,17 +245,19 @@ export function InlineAvailabilityPicker({
                   onClick={() => handleSlotSelect(slot)}
                   onMouseEnter={() => setHighlightIndex(index)}
                   className={cn(
-                    "flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+                    "flex items-center gap-2 rounded-[8px] border px-3 py-2.5 text-left type-caption transition-colors",
                     fromEmail && !isManualMode
-                      ? "border-primary/40 bg-primary/5"
-                      : "border-border",
+                      ? "border-l-2 border-primary bg-[rgba(0,102,204,0.10)] text-ink"
+                      : "border-hairline text-ink hover:bg-pearl",
                     busy && "opacity-60",
-                    index === highlightIndex && "ring-2 ring-ring"
+                    isHighlight && "ring-2 ring-[color:var(--color-primary-focus)]"
                   )}
                 >
-                  <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 truncate">{format(slot, "EEE, MMM d · h:mm a")}</span>
-                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5 shrink-0 text-ink-muted-48" strokeWidth={1.75} />
+                  <span className="min-w-0 truncate">
+                    {format(slot, "EEE, MMM d · h:mm a")}
+                  </span>
+                  <span className="ml-auto shrink-0 type-fine text-ink-muted-48">
                     {busy ? "busy" : `${duration}m`}
                   </span>
                 </button>

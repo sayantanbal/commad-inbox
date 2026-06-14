@@ -38,9 +38,9 @@ Paste or type:
 Send a calendar invite to friend@corsair.dev at 9 AM next Thursday, and email him saying I look forward to it
 ```
 
-Approve each `run_script` card. Show completion summary.
+Approve each **calendar invite** and **email** preview card (`create_calendar_invite`, then `send_email`). Show completion summary.
 
-> "Corsair MCP runs Gmail and Calendar with approval gates — nothing sends without you."
+> "Corsair MCP discovers Gmail and Calendar operations, but nothing sends without your approval."
 
 ## 0:55–1:05 — Search
 
@@ -57,7 +57,7 @@ Quick cuts: **`E`** archive with undo toast, **`Mod+K`** palette, **`?`** cheat 
 
 ## 1:15–1:25 — Stack + why Corsair
 
-> "Next.js, Neon pgvector, Vercel AI SDK, Better Auth. All Gmail and Calendar traffic goes through Corsair — webhooks, cache, MCP — zero direct Google API wiring in our app."
+> "Next.js, Neon pgvector, Vercel AI SDK, Better Auth. All Gmail and Calendar traffic goes through Corsair — webhooks, SDK plugins, MCP — no raw Google client code in our app."
 
 Show architecture diagram from README if recording slides.
 
@@ -74,7 +74,7 @@ Show architecture diagram from README if recording slides.
 - [ ] AI provider has quota (OpenAI or Gemini)
 - [ ] Hide browser bookmarks bar; 1440p or 1080p, dark mode
 - [ ] Disable notifications / Do Not Disturb
-- [ ] Test agent prompt end-to-end before rolling camera
+- [ ] Test agent prompt end-to-end before rolling camera (approve both invite + email previews)
 
 ## B-roll ideas (optional)
 

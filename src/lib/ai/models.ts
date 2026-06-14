@@ -13,7 +13,7 @@ export function isProviderConfigured(provider: AiProvider): boolean {
 }
 
 export function getConfiguredProviders(): AiProvider[] {
-  const order: AiProvider[] = ["openai", "gemini"];
+  const order: AiProvider[] = ["gemini", "openai"];
   return order.filter(isProviderConfigured);
 }
 

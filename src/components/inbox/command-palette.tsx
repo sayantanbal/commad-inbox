@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
+import { Search } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { KbdBadge } from "@/components/ui/kbd-badge";
 import { formatShortcut, getPaletteShortcuts } from "@/lib/shortcuts";
 import type { ShortcutContext } from "@/lib/types";
 
 const contextLabels: Record<ShortcutContext, string> = {
-  global: "Global",
-  list: "List",
-  thread: "Thread",
+  global: "Navigation",
+  list: "Mail actions",
+  thread: "Thread actions",
   composer: "Composer",
 };
 
@@ -20,14 +22,21 @@ interface CommandPaletteProps {
   onAction: (action: string) => void;
 }
 
-export function CommandPalette({ open, onOpenChange, isMac, onAction }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  isMac,
+  onAction,
+}: CommandPaletteProps) {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!open) setSearch("");
   }, [open]);
 
-  const grouped = getPaletteShortcuts().reduce<Record<ShortcutContext, ReturnType<typeof getPaletteShortcuts>>>(
+  const grouped = getPaletteShortcuts().reduce<
+    Record<ShortcutContext, ReturnType<typeof getPaletteShortcuts>>
+  >(
     (acc, shortcut) => {
       acc[shortcut.context].push(shortcut);
       return acc;
@@ -37,25 +46,38 @@ export function CommandPalette({ open, onOpenChange, isMac, onAction }: CommandP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl overflow-hidden p-0">
-        <Command className="bg-popover" shouldFilter>
-          <Command.Input
-            value={search}
-            onValueChange={setSearch}
-            placeholder="Type a command..."
-            className="h-12 w-full border-b border-border bg-transparent px-4 text-sm outline-none placeholder:text-muted-foreground"
-            autoFocus
-          />
-          <Command.List className="max-h-80 overflow-y-auto p-2">
-            <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-              No commands found.
+      <DialogContent className="max-w-[560px] overflow-hidden p-0">
+        <Command className="bg-canvas" shouldFilter>
+          {/* Input row — 52px, hairline at bottom only */}
+          <div className="flex h-[52px] items-center gap-3 border-b border-hairline px-5">
+            <Search
+              className="h-4 w-4 text-ink-muted-48 flex-shrink-0"
+              strokeWidth={1.75}
+            />
+            <Command.Input
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Type a command or search..."
+              className="h-full w-full bg-transparent text-[17px] font-normal text-ink outline-none placeholder:text-ink-muted-48"
+              autoFocus
+            />
+          </div>
+
+          <Command.List className="max-h-[420px] overflow-y-auto p-2">
+            <Command.Empty className="px-4 py-10 text-center type-caption text-ink-muted-48">
+              No commands match that. Try a different verb.
             </Command.Empty>
+
             {(Object.keys(grouped) as ShortcutContext[]).map((context) => {
               const shortcuts = grouped[context];
               if (shortcuts.length === 0) return null;
 
               return (
-                <Command.Group key={context} heading={contextLabels[context]}>
+                <Command.Group
+                  key={context}
+                  heading={contextLabels[context]}
+                  className="[&_[cmdk-group-heading]]:type-caption-strong [&_[cmdk-group-heading]]:text-ink-muted-48 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.06em] [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2"
+                >
                   {shortcuts.map((shortcut) => (
                     <Command.Item
                       key={shortcut.id}
@@ -64,12 +86,12 @@ export function CommandPalette({ open, onOpenChange, isMac, onAction }: CommandP
                         onAction(shortcut.action);
                         onOpenChange(false);
                       }}
-                      className="flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm aria-selected:bg-accent"
+                      className="group flex h-11 cursor-pointer items-center justify-between rounded-[8px] px-3 type-caption text-ink aria-selected:bg-primary aria-selected:text-on-primary"
                     >
                       <span>{shortcut.description}</span>
-                      <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {formatShortcut(shortcut, isMac)}
-                      </kbd>
+                      <KeyChips
+                        label={formatShortcut(shortcut, isMac)}
+                      />
                     </Command.Item>
                   ))}
                 </Command.Group>
@@ -79,5 +101,25 @@ export function CommandPalette({ open, onOpenChange, isMac, onAction }: CommandP
         </Command>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Render a formatted shortcut string ("⌘ K" or "G I") as one or more
+ * KbdBadge chips. We split on whitespace / "+" so things like "G I" become
+ * two chips and "⌘+K" becomes a single chip "⌘K".
+ */
+function KeyChips({ label }: { label: string }) {
+  const tokens = label
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return null;
+  return (
+    <span className="flex items-center gap-1 group-aria-selected:[&_.kbd-badge]:bg-white/15 group-aria-selected:[&_.kbd-badge]:text-on-primary">
+      {tokens.map((t, i) => (
+        <KbdBadge key={`${t}-${i}`}>{t}</KbdBadge>
+      ))}
+    </span>
   );
 }

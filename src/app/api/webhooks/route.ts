@@ -3,6 +3,7 @@ import { corsair } from "@/lib/corsair";
 import { handleGmailMessageChanged } from "@/lib/webhooks/gmail-event";
 import { handleCalendarEventChanged } from "@/lib/webhooks/calendar-event";
 import { logWebhookAttempt } from "@/lib/webhooks/log";
+import { webhookTenantIdSchema } from "@/lib/schemas/webhooks";
 
 export const runtime = "nodejs";
 
@@ -15,10 +16,12 @@ function headersRecord(request: Request): Record<string, string> {
 }
 
 export async function POST(request: Request) {
-  const tenantId = new URL(request.url).searchParams.get("tenantId");
-  if (!tenantId) {
+  const tenantIdParam = new URL(request.url).searchParams.get("tenantId");
+  const tenantParsed = webhookTenantIdSchema.safeParse(tenantIdParam);
+  if (!tenantParsed.success) {
     return new Response("Missing tenantId", { status: 400 });
   }
+  const tenantId = tenantParsed.data;
 
   const rawBody = await request.text();
   const signature = request.headers.get("x-corsair-signature");

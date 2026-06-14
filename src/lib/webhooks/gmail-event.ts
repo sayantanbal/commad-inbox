@@ -1,6 +1,11 @@
 import { classifyThreadForUser } from "@/lib/classifier/persist";
 import { invalidateDailyBriefCache } from "@/lib/ai/daily-brief-cache";
+import { extractCommitmentsForUser } from "@/lib/commitments/persist";
+import { maybeSendFocusAutoReply } from "@/lib/focus/auto-reply";
 import { corsair } from "@/lib/corsair";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 type GmailWebhookEvent = {
   type?: string;
@@ -20,6 +25,22 @@ export async function handleGmailMessageChanged(
   if (!threadId) return;
 
   const tenant = corsair.withTenant(tenantId);
-  await classifyThreadForUser(tenantId, tenant, threadId);
+  const classification = await classifyThreadForUser(tenantId, tenant, threadId);
   await invalidateDailyBriefCache(tenantId);
+
+  if (classification) {
+    void extractCommitmentsForUser(tenantId, tenant, threadId, classification.lane).catch(
+      (error) => console.error("[commitments] webhook extract failed", threadId, error)
+    );
+  }
+
+  const [user] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, tenantId));
+  if (user?.email) {
+    void maybeSendFocusAutoReply(tenantId, user.email, tenant, threadId).catch((error) =>
+      console.error("[focus] auto-reply failed", threadId, error)
+    );
+  }
 }
