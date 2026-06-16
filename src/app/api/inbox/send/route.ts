@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
+import { enforceUserRateLimit } from "@/lib/api/user-rate-limit";
 import { cancelQueuedSend, dispatchScheduledSend, queueSend } from "@/lib/inbox/scheduled-sends";
 import { scheduledSendIdBodySchema, sendBodySchema } from "@/lib/schemas/api";
 
 const UNDO_WINDOW_MS = 5000;
 
+function checkSendRateLimit(userId: string) {
+  return enforceUserRateLimit(userId, "inbox-send");
+}
+
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
+
+  const rateLimited = checkSendRateLimit(auth.userId);
+  if (rateLimited) return rateLimited;
 
   const parsed = await parseJsonBody(request, sendBodySchema);
   if (!parsed.ok) return parsed.response;
@@ -23,6 +31,7 @@ export async function POST(request: Request) {
     body: parsed.data.body,
     threadId: parsed.data.threadId,
     sendAt,
+    attachmentIds: parsed.data.attachmentIds,
   });
 
   return NextResponse.json({
@@ -35,6 +44,9 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
+
+  const rateLimited = checkSendRateLimit(auth.userId);
+  if (rateLimited) return rateLimited;
 
   const parsed = await parseJsonBody(request, scheduledSendIdBodySchema);
   if (!parsed.ok) return parsed.response;

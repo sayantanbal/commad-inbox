@@ -1,14 +1,14 @@
 import { z } from "zod";
+import { LIMITS } from "@/lib/schemas/limits";
+import { nonEmptyBoundedString, strictObject } from "@/lib/schemas/primitives";
 
 /** Gmail users.watch / Calendar events.watch API response. */
-export const googleWatchResponseSchema = z
-  .object({
-    expiration: z.union([z.string(), z.number()]).optional(),
-    historyId: z.union([z.string(), z.number()]).optional(),
-    resourceId: z.string().optional(),
-    resourceUri: z.string().optional(),
-  })
-  .passthrough();
+export const googleWatchResponseSchema = strictObject({
+  expiration: z.union([z.string().max(32), z.number().finite()]).optional(),
+  historyId: z.union([z.string().max(32), z.number().finite()]).optional(),
+  resourceId: nonEmptyBoundedString(LIMITS.SHORT_STRING, "resourceId").optional(),
+  resourceUri: z.string().url().max(LIMITS.URL).optional(),
+});
 
 export type GoogleWatchResponse = z.infer<typeof googleWatchResponseSchema>;
 
@@ -40,9 +40,9 @@ export function parseGoogleWatchResponse(body: string): {
   };
 }
 
-export const webhookTenantIdSchema = z.string().min(1, "tenantId is required");
+export const webhookTenantIdSchema = nonEmptyBoundedString(LIMITS.TENANT_ID, "tenantId");
 
-export const cronForceQuerySchema = z.object({
+export const cronForceQuerySchema = strictObject({
   force: z
     .enum(["0", "1", "true", "false"])
     .optional()

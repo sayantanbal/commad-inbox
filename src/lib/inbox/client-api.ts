@@ -46,12 +46,68 @@ export async function unsnoozeThreadApi(threadId: string) {
   if (!response.ok) throw new Error(await parseError(response));
 }
 
+export type OutboundAttachmentMeta = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  source: "upload" | "thread_forward";
+};
+
+export async function uploadOutboundAttachmentApi(file: File): Promise<OutboundAttachmentMeta> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch("/api/inbox/outbound-attachments", {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OutboundAttachmentMeta>;
+}
+
+export async function stageThreadAttachmentApi(input: {
+  threadId: string;
+  messageId: string;
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}): Promise<OutboundAttachmentMeta> {
+  const response = await fetch("/api/inbox/outbound-attachments/from-thread", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<OutboundAttachmentMeta>;
+}
+
+export async function deleteOutboundAttachmentApi(id: string): Promise<void> {
+  const response = await fetch(`/api/inbox/outbound-attachments/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+}
+
+export async function fetchOutboundAttachmentMetaApi(
+  ids: string[]
+): Promise<OutboundAttachmentMeta[]> {
+  if (ids.length === 0) return [];
+  const response = await fetch(
+    `/api/inbox/outbound-attachments?ids=${encodeURIComponent(ids.join(","))}`
+  );
+  if (!response.ok) throw new Error(await parseError(response));
+  const data = (await response.json()) as { attachments: OutboundAttachmentMeta[] };
+  return data.attachments;
+}
+
 export async function queueSendApi(input: {
   to: string[];
   subject: string;
   body: string;
   threadId?: string;
   sendAt?: Date;
+  attachmentIds?: string[];
 }) {
   const response = await fetch("/api/inbox/send", {
     method: "POST",
@@ -475,6 +531,63 @@ export async function dismissContactApi(email: string) {
   });
   if (!response.ok) throw new Error(await parseError(response));
   return response.json() as Promise<{ success: boolean }>;
+}
+
+export type AppContactListRow = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  source: string;
+  createdAt: string;
+};
+
+export async function fetchAppContactsListApi(params: {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params.page) search.set("page", String(params.page));
+  if (params.pageSize) search.set("pageSize", String(params.pageSize));
+  if (params.q) search.set("q", params.q);
+  const response = await fetch(`/api/inbox/contacts/app?${search}`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    contacts: AppContactListRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>;
+}
+
+export type GoogleContactsStatus = {
+  connected: boolean;
+  lastSyncedAt: string | null;
+  connectedAt: string | null;
+};
+
+export async function fetchGoogleContactsStatusApi() {
+  const response = await fetch("/api/inbox/contacts/google");
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<GoogleContactsStatus>;
+}
+
+export async function syncGoogleContactsApi() {
+  const response = await fetch("/api/inbox/contacts/google", { method: "POST" });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<
+    GoogleContactsStatus & { imported: number; skipped: number; total: number }
+  >;
+}
+
+export async function disconnectGoogleContactsApi(removeImported: boolean) {
+  const response = await fetch("/api/inbox/contacts/google", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ removeImported }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ success: boolean; removedContacts: number }>;
 }
 
 export async function fetchFreeBusyApi(emails: string[], start: Date, end: Date) {

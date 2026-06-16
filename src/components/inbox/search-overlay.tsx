@@ -18,6 +18,7 @@ interface SearchOverlayProps {
 export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOverlayProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
+  const [indexingHint, setIndexingHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { provider, setProvider, availableProviders } = useAiProvider();
@@ -35,6 +36,7 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
     const q = query.trim();
     if (q.length < 2) {
       setResults([]);
+      setIndexingHint(null);
       return;
     }
 
@@ -50,8 +52,24 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
         if (!response.ok) {
           throw new Error("Search failed");
         }
-        const data = (await response.json()) as { results: SearchHit[] };
+        const data = (await response.json()) as {
+          results: SearchHit[];
+          indexing?: {
+            partial: boolean;
+            indexedCount: number;
+            inboxTotalThreads: number | null;
+          };
+        };
         setResults(data.results);
+        if (data.indexing?.partial && data.indexing.inboxTotalThreads != null) {
+          setIndexingHint(
+            `Searching ${data.indexing.indexedCount} of ${data.indexing.inboxTotalThreads} indexed threads — background indexing in progress.`
+          );
+        } else if (data.indexing?.partial) {
+          setIndexingHint("Background indexing in progress — results will grow as more threads are indexed.");
+        } else {
+          setIndexingHint(null);
+        }
       } catch {
         setError("Could not search. Check your API key and backfill status.");
         setResults([]);
@@ -99,8 +117,12 @@ export function SearchOverlay({ open, onOpenChange, onSelectThread }: SearchOver
             {error ? <p className="px-2 py-4 text-sm text-destructive">{error}</p> : null}
             {!loading && !error && query.trim().length < 2 ? (
               <p className="px-2 py-4 text-sm text-muted-foreground">
-                Type at least 2 characters. Search covers classified threads from backfill.
+                Type at least 2 characters. Semantic search covers indexed inbox threads and
+                grows while background indexing runs.
               </p>
+            ) : null}
+            {indexingHint ? (
+              <p className="px-2 py-2 text-xs text-muted-foreground">{indexingHint}</p>
             ) : null}
             {results.map((hit) => (
               <button

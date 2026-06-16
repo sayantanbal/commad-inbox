@@ -1,17 +1,13 @@
 import "server-only";
 
+import {
+  fetchPeopleConnectionsPage,
+  getGmailAccessToken,
+  GoogleProxyError,
+  type PeopleConnection,
+} from "@/lib/corsair/google-proxy";
 import type { CorsairInstance } from "@/lib/corsair";
 import { upsertAppContacts, type ParsedContactInput } from "@/lib/contacts/app-contacts";
-
-interface PeopleConnection {
-  names?: Array<{ displayName?: string }>;
-  emailAddresses?: Array<{ value?: string }>;
-}
-
-interface PeopleConnectionsResponse {
-  connections?: PeopleConnection[];
-  nextPageToken?: string;
-}
 
 function parseConnections(connections: PeopleConnection[]): ParsedContactInput[] {
   const contacts: ParsedContactInput[] = [];
@@ -36,33 +32,9 @@ export async function importGoogleContactsWithToken(
   let pageToken: string | undefined;
 
   do {
-    const params = new URLSearchParams({
-      personFields: "names,emailAddresses",
-      pageSize: "1000",
-    });
-    if (pageToken) params.set("pageToken", pageToken);
-
-    const response = await fetch(
-      `https://people.googleapis.com/v1/people/me/connections?${params}`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }
-    );
-
-    if (response.status === 403) {
-      throw new Error(
-        "Google Contacts access denied. Connect Google Contacts to grant read-only access."
-      );
-    }
-
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`Google Contacts import failed (${response.status}): ${detail.slice(0, 200)}`);
-    }
-
-    const payload = (await response.json()) as PeopleConnectionsResponse;
-    contacts.push(...parseConnections(payload.connections ?? []));
-    pageToken = payload.nextPageToken;
+    const page = await fetchPeopleConnectionsPage(accessToken, pageToken);
+    contacts.push(...parseConnections(page.connections));
+    pageToken = page.nextPageToken;
   } while (pageToken);
 
   if (contacts.length === 0) {
@@ -77,9 +49,15 @@ export async function importFromGoogleContacts(
   userId: string,
   tenant: ReturnType<CorsairInstance["withTenant"]>
 ): Promise<{ imported: number; skipped: number; total: number }> {
-  const token = await tenant.gmail.keys.get_access_token();
-  if (!token) {
-    throw new Error("Google access token unavailable");
+  const token = await getGmailAccessToken(tenant);
+  try {
+    return await importGoogleContactsWithToken(userId, token);
+  } catch (error) {
+    if (error instanceof GoogleProxyError && error.status === 403) {
+      throw new Error(
+        "Google Contacts access denied. Connect Google Contacts to grant read-only access."
+      );
+    }
+    throw error;
   }
-  return importGoogleContactsWithToken(userId, token);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
 import { importFromGmailSent, upsertAppContacts } from "@/lib/contacts/app-contacts";
+import { importDemoContacts } from "@/lib/contacts/demo-contacts";
 import { importFromGoogleContacts } from "@/lib/contacts/google-contacts";
 import { parseContactFile, parsePlainEmailList } from "@/lib/contacts/import";
 import { contactsImportJsonBodySchema } from "@/lib/schemas/api";
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
   if (parsed.data.source === "gmail-sent") {
     const result = await importFromGmailSent(auth.userId, auth.tenant);
     return NextResponse.json({ ...result, source: "gmail-sent" });
+  }
+
+  if (parsed.data.source === "demo-contacts") {
+    const result = await importDemoContacts(auth.userId);
+    return NextResponse.json({ ...result, source: "demo-contacts", total: result.imported + result.skipped });
   }
 
   if (parsed.data.source === "google-contacts") {

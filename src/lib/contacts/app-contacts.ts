@@ -1,12 +1,12 @@
 import "server-only";
 
 import { randomUUID } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { getContactsForUser } from "@/lib/contacts/rebuild";
 import { db } from "@/lib/db";
 import { appContacts, contactDismissals } from "@/lib/db/schema";
 
-export type AppContactSource = "manual" | "import" | "google" | "gmail-sent";
+export type AppContactSource = "manual" | "import" | "google" | "gmail-sent" | "demo";
 
 export interface ParsedContactInput {
   email: string;
@@ -101,6 +101,87 @@ export async function upsertAppContacts(
   }
 
   return { imported, skipped };
+}
+
+export interface AppContactRow {
+  id: string;
+  email: string;
+  displayName: string | null;
+  source: string;
+  createdAt: string;
+}
+
+export async function listAppContactsPaginated(
+  userId: string,
+  options: { page: number; pageSize: number; search?: string }
+): Promise<{ contacts: AppContactRow[]; total: number; page: number; pageSize: number }> {
+  const page = Math.max(1, options.page);
+  const pageSize = Math.min(100, Math.max(1, options.pageSize));
+  const offset = (page - 1) * pageSize;
+  const search = options.search?.trim();
+
+  const baseWhere = and(eq(appContacts.userId, userId), eq(appContacts.status, "active"));
+  const where = search
+    ? and(
+        baseWhere,
+        or(
+          ilike(appContacts.email, `%${search}%`),
+          ilike(appContacts.displayName, `%${search}%`)
+        )
+      )
+    : baseWhere;
+
+  const [totalRow] = await db.select({ value: count() }).from(appContacts).where(where);
+  const total = Number(totalRow?.value ?? 0);
+
+  const rows = await db
+    .select()
+    .from(appContacts)
+    .where(where)
+    .orderBy(desc(appContacts.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    contacts: rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      displayName: row.displayName,
+      source: row.source,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    total,
+    page,
+    pageSize,
+  };
+}
+
+export async function removeGoogleSourceContacts(userId: string): Promise<number> {
+  const rows = await db
+    .select({ id: appContacts.id })
+    .from(appContacts)
+    .where(
+      and(
+        eq(appContacts.userId, userId),
+        eq(appContacts.source, "google"),
+        eq(appContacts.status, "active")
+      )
+    );
+
+  if (rows.length === 0) return 0;
+
+  await db
+    .update(appContacts)
+    .set({ status: "dismissed" })
+    .where(
+      and(
+        eq(appContacts.userId, userId),
+        eq(appContacts.source, "google"),
+        eq(appContacts.status, "active")
+      )
+    );
+
+  return rows.length;
 }
 
 export async function dismissContact(userId: string, email: string): Promise<void> {

@@ -17,14 +17,19 @@ Use this when submitting **Command Center Builder** (MacBook Giveaway Hackathon)
 
 ## Demo video script
 
-Follow [demo-script.md](./demo-script.md). Cover:
+Follow **[demo-script.md](./demo-script.md)** — **raw 90s, single take, screen + voice only** (no edits).
+
+Must show on camera:
 
 1. Problem (Gmail + Calendar friction)
-2. AI triage lanes
-3. Hero workflow (`M` → invite + draft)
-4. Agent chat with approval UI
-5. Semantic + advanced search
-6. Stack and Corsair usage
+2. AI triage lanes + pre-staged webhook thread in Schedule
+3. Hero workflow (`M` → slot → invite + draft)
+4. Agent chat with approval UI (calendar + email)
+5. `/` semantic + `Mod+Shift+F` advanced search
+6. Stack: Corsair SDK, webhooks, MCP, pgvector
+7. Close with live URL
+
+Pre-staging checklist is in demo-script.md — **do not wait for live webhook on camera**.
 
 ## Social posts
 
@@ -46,6 +51,19 @@ bun run build
 bun test
 bun run smoke:corsair   # optional — needs DATABASE_URL
 ```
+
+### Deploy day (evening before record)
+
+1. Deploy `main` to production (`command-inbox.sayantanbal.in`)
+2. Set `APP_URL` to production HTTPS on host
+3. `bun run db:migrate` against prod DB
+4. `bun scripts/renew-watches.ts` (after deploy)
+5. Sign in with **dedicated demo Gmail** → connect Google
+6. Leave app open or revisit until full index completes (overnight OK)
+
+### Record day (morning)
+
+See [demo-script.md](./demo-script.md) pre-staging + recording checklist.
 
 Live checklist (see [deploy.md](./deploy.md#6-post-deploy-smoke-test)):
 

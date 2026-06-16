@@ -6,7 +6,9 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AttachmentStaging } from "@/components/inbox/attachment-staging";
 import { KbdBadge } from "@/components/ui/kbd-badge";
+import type { OutboundAttachmentMeta } from "@/lib/inbox/client-api";
 import type { SendTimeSuggestion } from "@/lib/schemas/domain";
 
 interface SnippetOption {
@@ -24,10 +26,10 @@ interface ComposerPanelProps {
   snippets?: SnippetOption[];
   sendTimeSuggestion?: SendTimeSuggestion | null;
   onClose: () => void;
-  onSend: (body: string) => void;
+  onSend: (body: string, attachmentIds?: string[]) => void;
   onToneChange?: (tone: "professional" | "friendly" | "brief") => void;
-  onSendLater?: (body: string) => void;
-  onOpenSendLater?: (body: string) => void;
+  onSendLater?: (body: string, attachmentIds?: string[]) => void;
+  onOpenSendLater?: (body: string, attachmentIds?: string[]) => void;
 }
 
 export function ComposerPanel({
@@ -46,14 +48,25 @@ export function ComposerPanel({
 }: ComposerPanelProps) {
   const onCloseRef = useRef(onClose);
   const onSendRef = useRef(onSend);
+  const attachmentIdsRef = useRef<string[]>([]);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const [snippetQuery, setSnippetQuery] = useState("");
   const [snippetOpen, setSnippetOpen] = useState(false);
+  const [stagedAttachments, setStagedAttachments] = useState<OutboundAttachmentMeta[]>([]);
+
+  const attachmentIds = stagedAttachments.map((item) => item.id);
+  attachmentIdsRef.current = attachmentIds;
 
   useEffect(() => {
     onCloseRef.current = onClose;
     onSendRef.current = onSend;
   }, [onClose, onSend]);
+
+  useEffect(() => {
+    if (!open) {
+      setStagedAttachments([]);
+    }
+  }, [open]);
 
   const editor = useEditor({
     extensions: [
@@ -93,7 +106,10 @@ export function ComposerPanel({
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
           event.preventDefault();
           const html = editorRef.current?.getHTML() ?? "";
-          onSendRef.current(html);
+          onSendRef.current(
+            html,
+            attachmentIdsRef.current.length > 0 ? attachmentIdsRef.current : undefined
+          );
           return true;
         }
 
@@ -195,8 +211,9 @@ export function ComposerPanel({
           type="button"
           onClick={() => {
             const html = editor?.getHTML() ?? "";
-            if (onOpenSendLater) onOpenSendLater(html);
-            else onSendLater?.(html);
+            const ids = attachmentIds.length > 0 ? attachmentIds : undefined;
+            if (onOpenSendLater) onOpenSendLater(html, ids);
+            else onSendLater?.(html, ids);
           }}
           className="border-b border-divider-soft px-4 py-2 text-left type-caption text-ink-muted-48 w-full hover:bg-pearl transition-colors"
         >
@@ -209,6 +226,13 @@ export function ComposerPanel({
       )}
 
       {/* Send row */}
+      <div className="border-t border-divider-soft px-4 py-2">
+        <AttachmentStaging
+          attachments={stagedAttachments}
+          onChange={setStagedAttachments}
+          disabled={loading}
+        />
+      </div>
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           {(["professional", "friendly", "brief"] as const).map((tone) => (
@@ -233,8 +257,9 @@ export function ComposerPanel({
               className="btn-pearl-capsule"
               onClick={() => {
                 const html = editor?.getHTML() ?? "";
-                if (onOpenSendLater) onOpenSendLater(html);
-                else onSendLater?.(html);
+                const ids = attachmentIds.length > 0 ? attachmentIds : undefined;
+                if (onOpenSendLater) onOpenSendLater(html, ids);
+                else onSendLater?.(html, ids);
               }}
             >
               Send later
@@ -243,7 +268,7 @@ export function ComposerPanel({
           <Button
             onClick={() => {
               const html = editor?.getHTML() ?? "";
-              onSend(html);
+              onSend(html, attachmentIds.length > 0 ? attachmentIds : undefined);
             }}
           >
             Send

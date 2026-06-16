@@ -4,6 +4,10 @@ import { format } from "date-fns";
 import { Calendar, Clock, Mail } from "lucide-react";
 import { getToolName, type DynamicToolUIPart, type ToolUIPart } from "ai";
 import { Button } from "@/components/ui/button";
+import {
+  AttachmentApprovalPreview,
+  useAttachmentApprovalState,
+} from "@/components/inbox/attachment-approval-preview";
 
 type ApprovableToolPart = ToolUIPart | DynamicToolUIPart;
 
@@ -12,6 +16,7 @@ interface AgentToolApprovalProps {
   onApprove: (approvalId: string) => void;
   onDeny: (approvalId: string) => void;
   onEdit?: (toolName: string, input: Record<string, unknown>) => void;
+  shouldBridgeInviteToInbox?: (input: Record<string, unknown>) => boolean;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -33,6 +38,8 @@ function ApprovalCard({
   onApprove,
   onDeny,
   onEdit,
+  approveDisabled,
+  blockedBanner,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -44,6 +51,8 @@ function ApprovalCard({
   onApprove: (id: string) => void;
   onDeny: (id: string) => void;
   onEdit?: (toolName: string, input: Record<string, unknown>) => void;
+  approveDisabled?: boolean;
+  blockedBanner?: string;
 }) {
   return (
     <div
@@ -59,12 +68,18 @@ function ApprovalCard({
       </div>
       <p className="mt-2 type-body-strong text-ink">{title}</p>
 
+      {blockedBanner ? (
+        <p className="mt-2 rounded-[8px] border border-destructive/30 bg-destructive/10 px-3 py-2 type-caption text-destructive">
+          {blockedBanner}
+        </p>
+      ) : null}
+
       <div className="mt-3 rounded-[8px] border border-hairline bg-canvas p-3 type-caption text-ink">
         {preview}
       </div>
 
       <div className="mt-4 flex items-center gap-2">
-        <Button size="sm" onClick={() => onApprove(approvalId)}>
+        <Button size="sm" onClick={() => onApprove(approvalId)} disabled={approveDisabled}>
           {approveLabel}
         </Button>
         {onEdit && (
@@ -124,6 +139,8 @@ function SendEmailApproval({
   const to = asStringArray(input.to);
   const subject = typeof input.subject === "string" ? input.subject : "";
   const body = typeof input.body === "string" ? input.body : "";
+  const attachmentIds = asStringArray(input.attachmentIds);
+  const { blocked } = useAttachmentApprovalState(attachmentIds);
 
   return (
     <ApprovalCard
@@ -136,6 +153,12 @@ function SendEmailApproval({
       onApprove={onApprove}
       onDeny={onDeny}
       onEdit={onEdit}
+      approveDisabled={blocked}
+      blockedBanner={
+        blocked
+          ? "This exceeds Gmail's native attachment limit. Smart large-file handling is coming soon—this agent will compress, split, or route oversized files automatically."
+          : undefined
+      }
       preview={
         <div className="space-y-2">
           <RecipientRows input={input} />
@@ -147,6 +170,7 @@ function SendEmailApproval({
             <p className="type-fine text-ink-muted-48 mb-1">Message</p>
             <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">{body || "—"}</p>
           </div>
+          <AttachmentApprovalPreview attachmentIds={attachmentIds} />
         </div>
       }
     />
@@ -170,6 +194,8 @@ function ScheduleSendApproval({
   const body = typeof input.body === "string" ? input.body : "";
   const sendAtRaw = typeof input.sendAt === "string" ? input.sendAt : "";
   const sendAt = sendAtRaw ? new Date(sendAtRaw) : null;
+  const attachmentIds = asStringArray(input.attachmentIds);
+  const { blocked } = useAttachmentApprovalState(attachmentIds);
 
   return (
     <ApprovalCard
@@ -182,6 +208,12 @@ function ScheduleSendApproval({
       onApprove={onApprove}
       onDeny={onDeny}
       onEdit={onEdit}
+      approveDisabled={blocked}
+      blockedBanner={
+        blocked
+          ? "This exceeds Gmail's native attachment limit. Smart large-file handling is coming soon—this agent will compress, split, or route oversized files automatically."
+          : undefined
+      }
       preview={
         <div className="space-y-2">
           <RecipientRows input={input} />
@@ -198,6 +230,7 @@ function ScheduleSendApproval({
           <div className="border-t border-hairline pt-2">
             <p className="type-caption text-ink-muted-80 whitespace-pre-wrap">{body || "—"}</p>
           </div>
+          <AttachmentApprovalPreview attachmentIds={attachmentIds} />
         </div>
       }
     />
@@ -210,13 +243,16 @@ function CalendarInviteApproval({
   onDeny,
   onEdit,
   approvalId,
+  shouldBridgeInviteToInbox,
 }: {
   input: Record<string, unknown>;
   onApprove: (id: string) => void;
   onDeny: (id: string) => void;
   onEdit?: (toolName: string, input: Record<string, unknown>) => void;
   approvalId: string;
+  shouldBridgeInviteToInbox?: (input: Record<string, unknown>) => boolean;
 }) {
+  const useInboxFlow = shouldBridgeInviteToInbox?.(input) ?? false;
   const summary = typeof input.summary === "string" ? input.summary : "Meeting";
   const startRaw = typeof input.start === "string" ? input.start : "";
   const start = startRaw ? new Date(startRaw) : null;
@@ -233,13 +269,20 @@ function CalendarInviteApproval({
     <ApprovalCard
       icon={<Calendar className="h-3.5 w-3.5" strokeWidth={1.75} />}
       title={`Send invite — ${summary}`}
-      approveLabel="Approve & send invite"
+      approveLabel={useInboxFlow ? "Schedule in inbox" : "Approve & send invite"}
       approvalId={approvalId}
       toolName="create_calendar_invite"
       input={input}
-      onApprove={onApprove}
+      onApprove={
+        useInboxFlow && onEdit
+          ? () => {
+              onDeny(approvalId);
+              onEdit("create_calendar_invite", input);
+            }
+          : onApprove
+      }
       onDeny={onDeny}
-      onEdit={onEdit}
+      onEdit={useInboxFlow ? undefined : onEdit}
       preview={
         <div className="space-y-2">
           <div className="grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-1.5">
@@ -269,6 +312,7 @@ export function AgentToolApproval({
   onApprove,
   onDeny,
   onEdit,
+  shouldBridgeInviteToInbox,
 }: AgentToolApprovalProps) {
   const input = (part.input as Record<string, unknown> | undefined) ?? {};
   const toolName = getToolName(part);
@@ -308,6 +352,7 @@ export function AgentToolApproval({
         onApprove={onApprove}
         onDeny={onDeny}
         onEdit={onEdit}
+        shouldBridgeInviteToInbox={shouldBridgeInviteToInbox}
       />
     );
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSessionApi } from "@/lib/api/require-session";
-import { fetchGoogleFreeBusy } from "@/lib/calendar/google-free-busy";
+import { fetchBusyFromCorsairEvents } from "@/lib/calendar/corsair-events-busy";
 
 export async function GET(request: Request) {
   const auth = await requireSessionApi();
@@ -16,10 +16,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const busy = await fetchGoogleFreeBusy(auth.tenant, emails, start, end);
-    return NextResponse.json({ busy });
+    const busy = await fetchBusyFromCorsairEvents(
+      auth.tenant,
+      emails,
+      start,
+      end,
+      auth.userEmail
+    );
+    return NextResponse.json({ busy, source: "corsair-calendar-events" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Free/busy lookup failed";
+    const message = error instanceof Error ? error.message : "Busy lookup failed";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

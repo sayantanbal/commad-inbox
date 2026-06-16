@@ -1,4 +1,5 @@
 import { handleCalendarEventChanged } from "@/lib/webhooks/calendar-event";
+import { verifyCalendarWebhookChannel } from "@/lib/webhooks/verify-calendar-channel";
 import { webhookTenantIdSchema } from "@/lib/schemas/webhooks";
 
 export const runtime = "nodejs";
@@ -18,6 +19,13 @@ export async function POST(request: Request) {
   }
 
   const tenantId = tenantParsed.data;
+
+  const channelId = request.headers.get("x-goog-channel-id");
+  const channelToken = request.headers.get("x-goog-channel-token");
+  const verified = await verifyCalendarWebhookChannel(tenantId, channelId, channelToken);
+  if (!verified.ok) {
+    return new Response(verified.message, { status: verified.status });
+  }
 
   void handleCalendarEventChanged(tenantId).catch((error) => {
     console.error("[webhook] calendar push failed", error);

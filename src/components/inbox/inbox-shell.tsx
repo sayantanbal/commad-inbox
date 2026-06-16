@@ -27,6 +27,7 @@ import { ComposerPanel } from "@/components/inbox/composer-panel";
 import { ShortcutCheatsheet } from "@/components/inbox/shortcut-cheatsheet";
 import { MobileCommandFab, MobileTabBar, type MobileTab } from "@/components/inbox/mobile-tab-bar";
 import { ScheduleOverlapModal } from "@/components/inbox/schedule-overlap-modal";
+import { RescheduleExistingMeetingModal } from "@/components/inbox/reschedule-existing-meeting-modal";
 import { SendLaterPicker } from "@/components/inbox/send-later-picker";
 import { SnoozePicker } from "@/components/inbox/snooze-picker";
 import { ThreadList } from "@/components/inbox/thread-list";
@@ -98,9 +99,12 @@ import { useAiProvider } from "@/hooks/use-ai-provider";
 import { useIsMobile, usePlatform } from "@/hooks/use-platform";
 import type { MeetingBriefStored, SendTimeSuggestion, SuggestedAction } from "@/lib/schemas/domain";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
+import { schedulingIntentFromAgentInvite, shouldBridgeInviteToInbox } from "@/lib/inbox/agent-scheduling-intent";
 import { deserializeInboxData, deserializeThreads } from "@/lib/inbox-serialize";
 import type { InboxRealtimeEvent } from "@/lib/realtime/pusher";
-import type { CalendarEvent, Classification, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
+import { formatFullIndexBannerDetail } from "@/lib/backfill/inbox-index-format";
+import type { InboxIndexStatus } from "@/lib/backfill/inbox-index-format";
+import type { CalendarEvent, Classification, SchedulingIntent, Thread, ThreadMeeting, TriageLane } from "@/lib/types";
 
 const ACTIVE_LANES: TriageLane[] = ["reply", "schedule", "fyi"];
 const LAYOUT_ID = "command-inbox-v3";
@@ -130,7 +134,10 @@ interface InboxShellProps {
   userId: string;
   userEmail: string;
   backfillComplete: boolean;
+  indexStatus: InboxIndexStatus;
   initialSnoozes: Array<{ threadId: string; until: Date }>;
+  initialOpenSettings?: string | null;
+  googleContactsReturn?: string | null;
 }
 
 function initialLane(classifications: Classification[]): TriageLane {
@@ -155,7 +162,10 @@ export function InboxShell({
   userId,
   userEmail,
   backfillComplete,
+  indexStatus: initialIndexStatus,
   initialSnoozes,
+  initialOpenSettings,
+  googleContactsReturn,
 }: InboxShellProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -203,6 +213,7 @@ export function InboxShell({
   const [availabilityMode, setAvailabilityMode] = useState<"create" | "reschedule">("create");
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
   const [sendLaterBody, setSendLaterBody] = useState("");
+  const [sendLaterAttachmentIds, setSendLaterAttachmentIds] = useState<string[]>([]);
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState<30 | 45 | 60>(30);
   const [overlapModalOpen, setOverlapModalOpen] = useState(false);
   const [overlapConflict, setOverlapConflict] = useState<CalendarEvent | null>(null);
@@ -211,6 +222,8 @@ export function InboxShell({
   const [customScheduleOpen, setCustomScheduleOpen] = useState(false);
   const [pendingCustomSlot, setPendingCustomSlot] = useState<Date | null>(null);
   const [rescheduleConflictEvent, setRescheduleConflictEvent] = useState<CalendarEvent | null>(null);
+  const [rescheduleConfirmOpen, setRescheduleConfirmOpen] = useState(false);
+  const [agentSchedulingIntent, setAgentSchedulingIntent] = useState<SchedulingIntent | null>(null);
   const [attendeeBusy, setAttendeeBusy] = useState<BusyInterval[]>([]);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -233,7 +246,14 @@ export function InboxShell({
   const [preBrief, setPreBrief] = useState<MeetingBriefStored | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(initialOpenSettings === "contacts");
+
+  useEffect(() => {
+    if (initialOpenSettings === "contacts") {
+      setSettingsOpen(true);
+    }
+  }, [initialOpenSettings]);
+
   const prefs = prefsData ?? {
     batchWindows: ["09:00", "13:00", "17:00"],
     focusModeEnabled: true,
@@ -343,6 +363,20 @@ export function InboxShell({
   }, [listThreads, threadSearch, classificationMap]);
 
   const selectedThread = liveThreads.find((t) => t.id === selectedThreadId) ?? null;
+  const agentOpenThread = useMemo(() => {
+    if (!selectedThread) return null;
+    const attachments = selectedThread.messages.flatMap((message) =>
+      message.attachments.map((att) => ({
+        messageId: message.id,
+        attachmentId: att.id,
+        filename: att.filename,
+        mimeType: att.mimeType,
+        sizeBytes: att.size,
+      }))
+    );
+    if (attachments.length === 0) return null;
+    return { threadId: selectedThread.id, attachments };
+  }, [selectedThread]);
   const selectedClassification = selectedThreadId ? classificationMap.get(selectedThreadId) : undefined;
 
   const counterpartyEmail = useMemo(() => {
@@ -438,7 +472,14 @@ export function InboxShell({
 
   useEffect(() => {
     setAvailabilityOpen(false);
+    setAgentSchedulingIntent(null);
   }, [selectedThreadId]);
+
+  useEffect(() => {
+    if (!availabilityOpen) {
+      setAgentSchedulingIntent(null);
+    }
+  }, [availabilityOpen]);
 
   useEffect(() => {
     if (!availabilityOpen) {
@@ -483,6 +524,12 @@ export function InboxShell({
 
 
 
+  const [indexStatus, setIndexStatus] = useState(initialIndexStatus);
+
+  useEffect(() => {
+    setIndexStatus(initialIndexStatus);
+  }, [initialIndexStatus]);
+
   useEffect(() => {
     if (!backfillComplete) {
       setActivities((prev) => {
@@ -498,8 +545,29 @@ export function InboxShell({
           ...prev,
         ];
       });
+      return;
     }
-  }, [backfillComplete]);
+
+    if (!indexStatus.fullIndexComplete) {
+      const pct =
+        indexStatus.inboxTotalThreads != null && indexStatus.inboxTotalThreads > 0
+          ? Math.round((indexStatus.indexedCount / indexStatus.inboxTotalThreads) * 100)
+          : 0;
+      setActivities((prev) => {
+        if (prev.some((a) => a.id === "full-index")) return prev;
+        return [
+          {
+            id: "full-index",
+            type: "background",
+            label: "Indexing inbox",
+            detail: formatFullIndexBannerDetail(indexStatus),
+            progress: pct,
+          },
+          ...prev,
+        ];
+      });
+    }
+  }, [backfillComplete, indexStatus]);
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mailboxViewRef = useRef(mailboxView);
@@ -574,7 +642,19 @@ export function InboxShell({
       return;
     }
     if (event.type === "calendar-updated") {
-      void loadCalendarMonth(new Date());
+      if (event.events && event.month) {
+        setCalendarEvents((prev) => {
+          const rest = prev.filter((item) => format(item.start, "yyyy-MM") !== event.month);
+          const fresh = event.events!.map((item) => ({
+            ...item,
+            start: new Date(item.start),
+            end: new Date(item.end),
+          }));
+          return [...rest, ...fresh].sort((a, b) => a.start.getTime() - b.start.getTime());
+        });
+      } else {
+        void loadCalendarMonth(new Date());
+      }
       setBriefInvalidationKey((key) => key + 1);
       void queryClient.invalidateQueries({ queryKey: [...inboxQueryKeys.all, "events"] });
       scheduleSyncInbox();
@@ -587,7 +667,7 @@ export function InboxShell({
           a.id === "backfill"
             ? {
                 ...a,
-                detail: `Classifying threads… ${event.completed}/${event.total}`,
+                detail: `Classifying recent threads… ${event.completed}/${event.total}`,
                 progress: pct,
               }
             : a
@@ -596,6 +676,48 @@ export function InboxShell({
     }
     if (event.type === "backfill-complete") {
       setActivities((prev) => prev.filter((a) => a.id !== "backfill"));
+      scheduleSyncInbox();
+    }
+    if (event.type === "full-index-progress") {
+      const pct = event.total > 0 ? Math.round((event.completed / event.total) * 100) : 0;
+      setIndexStatus((prev) => ({
+        ...prev,
+        quickBackfillComplete: true,
+        fullIndexComplete: false,
+        indexedCount: event.completed,
+        inboxTotalThreads: event.total,
+        remainingThreads: event.remaining,
+      }));
+      setActivities((prev) => {
+        const detail = `Indexing ${event.remaining} more threads… (${event.completed}/${event.total})`;
+        const existing = prev.find((a) => a.id === "full-index");
+        if (existing) {
+          return prev.map((a) =>
+            a.id === "full-index" ? { ...a, detail, progress: pct } : a
+          );
+        }
+        return [
+          {
+            id: "full-index",
+            type: "background",
+            label: "Indexing inbox",
+            detail,
+            progress: pct,
+          },
+          ...prev,
+        ];
+      });
+    }
+    if (event.type === "full-index-complete") {
+      setIndexStatus((prev) => ({
+        ...prev,
+        quickBackfillComplete: true,
+        fullIndexComplete: true,
+        indexedCount: event.indexed,
+        inboxTotalThreads: event.total,
+        remainingThreads: 0,
+      }));
+      setActivities((prev) => prev.filter((a) => a.id !== "full-index"));
       scheduleSyncInbox();
     }
     if (event.type === "reembed-progress") {
@@ -839,15 +961,45 @@ export function InboxShell({
     }
   }, [selectedLinkedEvent, selectedLinkedMeeting, selectedThreadId, showUndo]);
 
+  const openAgentMeetingPicker = useCallback(
+    (input: Record<string, unknown>) => {
+      const intent = schedulingIntentFromAgentInvite(input);
+      if (intent) {
+        setAgentSchedulingIntent(intent);
+        const duration = intent.duration;
+        setMeetingDurationMinutes((duration === 45 || duration === 60 ? duration : 30) as 30 | 45 | 60);
+      }
+      if (selectedThreadId && threadMeetingsMap.has(selectedThreadId)) {
+        setAvailabilityMode("reschedule");
+      } else {
+        setAvailabilityMode("create");
+      }
+      setAvailabilityOpen(true);
+      setWorkspacePanel("inbox");
+    },
+    [selectedThreadId, threadMeetingsMap]
+  );
+
+  const confirmRescheduleMeeting = useCallback(() => {
+    if (!selectedThreadId) return;
+    setRescheduleConfirmOpen(false);
+    setAvailabilityMode("reschedule");
+    setAvailabilityOpen(true);
+  }, [selectedThreadId]);
+
   const openScheduleMeeting = useCallback(() => {
     if (!selectedThreadId) return;
     const intentDuration = classificationMap.get(selectedThreadId)?.schedulingIntent?.duration;
     const linkedDuration = threadMeetingsMap.get(selectedThreadId)?.durationMinutes;
     const d = linkedDuration ?? intentDuration ?? 30;
     setMeetingDurationMinutes((d === 45 || d === 60 ? d : 30) as 30 | 45 | 60);
-    setAvailabilityMode(threadMeetingsMap.has(selectedThreadId) ? "reschedule" : "create");
-    setAvailabilityOpen(true);
     setWorkspacePanel("inbox");
+    if (threadMeetingsMap.has(selectedThreadId)) {
+      setRescheduleConfirmOpen(true);
+      return;
+    }
+    setAvailabilityMode("create");
+    setAvailabilityOpen(true);
   }, [selectedThreadId, threadMeetingsMap, classificationMap]);
 
   const handleAction = useCallback(
@@ -1250,7 +1402,7 @@ export function InboxShell({
   );
 
   const handleComposerSend = useCallback(
-    async (bodyHtml: string) => {
+    async (bodyHtml: string, attachmentIds?: string[]) => {
       if (!selectedThread) return;
 
       const subject = selectedThread.subject.startsWith("Re:")
@@ -1264,6 +1416,7 @@ export function InboxShell({
           subject,
           body: bodyHtml,
           threadId: selectedThread.id,
+          attachmentIds,
         });
 
         setComposerOpen(false);
@@ -1297,7 +1450,7 @@ export function InboxShell({
   }, [classifications, snoozedIds]);
 
   const handleSendLater = useCallback(
-    async (bodyHtml: string, suggestedAt?: Date) => {
+    async (bodyHtml: string, suggestedAt?: Date, attachmentIds?: string[]) => {
       if (!selectedThread || !bodyHtml.trim()) return;
 
       const sendAt = suggestedAt ?? new Date(Date.now() + 3_600_000);
@@ -1314,6 +1467,7 @@ export function InboxShell({
           body: bodyHtml,
           threadId: selectedThread.id,
           sendAt,
+          attachmentIds,
         });
 
         addActivity({
@@ -1656,7 +1810,9 @@ export function InboxShell({
           rsvpSummary={selectedRsvpSummary}
           availabilityOpen={availabilityOpen}
           availabilityMode={availabilityMode}
-          schedulingIntent={selectedClassification?.schedulingIntent ?? null}
+          schedulingIntent={
+            agentSchedulingIntent ?? selectedClassification?.schedulingIntent ?? null
+          }
           freeSlots={freeSlots}
           calendarEvents={calendarEvents}
           meetingDuration={meetingDuration}
@@ -1696,10 +1852,7 @@ export function InboxShell({
           onSelectSlot={(slot) => {
             void handleMeetingSlot(slot);
           }}
-          onRescheduleMeeting={() => {
-            setAvailabilityMode("reschedule");
-            setAvailabilityOpen(true);
-          }}
+          onRescheduleMeeting={openScheduleMeeting}
           onCancelMeeting={() => {
             void handleCancelMeeting();
           }}
@@ -1729,11 +1882,12 @@ export function InboxShell({
             })
             .finally(() => setDraftLoading(false));
         }}
-        onOpenSendLater={(body) => {
+        onOpenSendLater={(body, attachmentIds) => {
           setSendLaterBody(body);
+          setSendLaterAttachmentIds(attachmentIds ?? []);
           setSendLaterOpen(true);
         }}
-        onSendLater={(body) => handleSendLater(body)}
+        onSendLater={(body, attachmentIds) => handleSendLater(body, undefined, attachmentIds)}
       />
     </main>
   );
@@ -1875,6 +2029,10 @@ export function InboxShell({
           <Panel id="sidebar" defaultSize="40%" minSize="28%" maxSize="50%" className="min-w-0">
             <AgentChatPanel
               contacts={agentContacts}
+              openThread={agentOpenThread}
+              shouldBridgeInviteToInbox={(input) =>
+                shouldBridgeInviteToInbox(input, selectedThread)
+              }
               workspaceActive={
                 workspacePanel === "inbox" || workspacePanel === "calendar"
                   ? workspacePanel
@@ -1890,8 +2048,7 @@ export function InboxShell({
                   setWorkspacePanel("inbox");
                 }
                 if (toolName === "create_calendar_invite") {
-                  setAvailabilityOpen(true);
-                  setWorkspacePanel("inbox");
+                  openAgentMeetingPicker(input);
                 }
               }}
               onToolApproved={(toolName, input) => {
@@ -1946,6 +2103,10 @@ export function InboxShell({
           {mobileTab === "agent" && (
             <AgentChatPanel
               contacts={agentContacts}
+              openThread={agentOpenThread}
+              shouldBridgeInviteToInbox={(input) =>
+                shouldBridgeInviteToInbox(input, selectedThread)
+              }
               workspaceActive={
                 workspacePanel === "inbox" || workspacePanel === "calendar"
                   ? workspacePanel
@@ -2057,8 +2218,9 @@ export function InboxShell({
           onOpenChange={setSendLaterOpen}
           sendTimeSuggestion={sendTimeSuggestion}
           onSchedule={(at) => {
-            void handleSendLater(sendLaterBody, at);
+            void handleSendLater(sendLaterBody, at, sendLaterAttachmentIds);
             setSendLaterOpen(false);
+            setSendLaterAttachmentIds([]);
           }}
         />
         <CustomSchedulePicker
@@ -2076,6 +2238,12 @@ export function InboxShell({
           onSelect={(slot) => {
             void handleCustomScheduleSubmit(slot);
           }}
+        />
+        <RescheduleExistingMeetingModal
+          open={rescheduleConfirmOpen}
+          onOpenChange={setRescheduleConfirmOpen}
+          linkedEvent={selectedLinkedEvent}
+          onConfirm={confirmRescheduleMeeting}
         />
         <ScheduleOverlapModal
           open={overlapModalOpen}
@@ -2174,7 +2342,7 @@ export function InboxShell({
         />
         {settingsOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-card">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <h2 className="text-sm font-semibold">Settings</h2>
                 <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(false)}>
@@ -2182,6 +2350,7 @@ export function InboxShell({
                 </Button>
               </div>
               <InboxSettingsPanel
+                userEmail={userEmail}
                 batchWindows={prefs.batchWindows}
                 focusModeEnabled={prefs.focusModeEnabled}
                 autoResponderTemplate={prefs.autoResponderTemplate}
@@ -2206,6 +2375,7 @@ export function InboxShell({
                 }}
                 aiKeysStatus={aiKeysStatus}
                 onAiKeysStatusChange={setAiKeysStatus}
+                googleContactsReturn={googleContactsReturn}
               />
             </div>
           </div>

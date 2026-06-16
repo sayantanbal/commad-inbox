@@ -1,12 +1,19 @@
 import { z } from "zod";
 import { AI_PROVIDER_IDS } from "@/lib/ai/providers";
 import { draftToneSchema, threadIdField, triageLaneSchema } from "@/lib/schemas/domain";
+import { LIMITS } from "@/lib/schemas/limits";
+import {
+  boundedString,
+  emailOrListSchema,
+  nonEmptyBoundedString,
+  strictObject,
+  timeSlotSchema,
+  uiMessageSchema,
+  uuidArraySchema,
+  weekdayKeySchema,
+} from "@/lib/schemas/primitives";
 
 export const aiProviderSchema = z.enum(AI_PROVIDER_IDS);
-
-function strictObject<T extends z.ZodRawShape>(shape: T) {
-  return z.object(shape).strict();
-}
 
 export const archiveBodySchema = strictObject({
   threadId: threadIdField,
@@ -33,17 +40,19 @@ export const draftBodySchema = strictObject({
 });
 
 export const sendBodySchema = strictObject({
-  to: z.array(z.string().email({ message: "to must contain valid email addresses" })).min(1, {
-    message: "At least one recipient is required",
-  }),
-  subject: z.string().min(1, "subject is required"),
-  body: z.string().min(1, "body is required"),
+  to: z
+    .array(z.string().email({ message: "to must contain valid email addresses" }))
+    .min(1, { message: "At least one recipient is required" })
+    .max(LIMITS.EMAIL_RECIPIENTS),
+  subject: nonEmptyBoundedString(LIMITS.EMAIL_SUBJECT, "subject"),
+  body: nonEmptyBoundedString(LIMITS.EMAIL_BODY, "body"),
   threadId: threadIdField.optional(),
   sendAt: z.string().datetime({ message: "sendAt must be an ISO 8601 datetime" }).optional(),
+  attachmentIds: uuidArraySchema.optional(),
 });
 
 export const scheduledSendIdBodySchema = strictObject({
-  scheduledSendId: z.string().min(1, "scheduledSendId is required"),
+  scheduledSendId: nonEmptyBoundedString(LIMITS.SCHEDULED_SEND_ID, "scheduledSendId"),
 });
 
 export const meetingCreateBodySchema = strictObject({
@@ -62,10 +71,7 @@ export const meetingCancelBodySchema = strictObject({
 });
 
 export const searchBodySchema = strictObject({
-  query: z
-    .string()
-    .min(1, "query is required")
-    .max(500, "query must be at most 500 characters"),
+  query: nonEmptyBoundedString(LIMITS.SEARCH_QUERY, "query"),
   limit: z
     .number()
     .int({ message: "limit must be a whole number" })
@@ -76,8 +82,8 @@ export const searchBodySchema = strictObject({
 });
 
 export const advancedSearchBodySchema = strictObject({
-  query: z.string().max(500).optional(),
-  sender: z.string().max(200).optional(),
+  query: boundedString(LIMITS.SEARCH_QUERY, "query").optional(),
+  sender: boundedString(LIMITS.SENDER_FILTER, "sender").optional(),
   after: z.string().datetime().optional(),
   before: z.string().datetime().optional(),
   hasAttachment: z.boolean().optional(),
@@ -96,35 +102,46 @@ export const advancedSearchBodySchema = strictObject({
   { message: "At least one search filter is required" }
 );
 
-const uiMessagePartSchema = z
-  .object({
-    type: z.string().min(1, "message part type is required"),
-  })
-  .passthrough();
-
-const uiMessageSchema = z.object({
-  id: z.string().min(1, "message id is required"),
-  role: z.enum(["system", "user", "assistant"]),
-  parts: z.array(uiMessagePartSchema).min(1, "message must include at least one part"),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
 export const agentChatBodySchema = strictObject({
-  messages: z.array(uiMessageSchema).default([]),
+  messages: z.array(uiMessageSchema).max(LIMITS.MESSAGES).default([]),
   provider: aiProviderSchema.default("openai"),
-  conversationId: z.string().min(1).optional(),
+  conversationId: nonEmptyBoundedString(LIMITS.CONVERSATION_ID, "conversationId").optional(),
   mentionedContacts: z
     .array(
-      z.object({
+      strictObject({
         email: z.string().email(),
-        displayName: z.string(),
+        displayName: nonEmptyBoundedString(LIMITS.DISPLAY_NAME, "displayName"),
       })
     )
+    .max(LIMITS.MENTIONED_CONTACTS)
     .optional(),
+  pendingAttachmentIds: uuidArraySchema.optional(),
+  openThread: strictObject({
+    threadId: threadIdField,
+    attachments: z
+      .array(
+        strictObject({
+          messageId: nonEmptyBoundedString(LIMITS.MESSAGE_ID, "messageId"),
+          attachmentId: nonEmptyBoundedString(LIMITS.ATTACHMENT_ID, "attachmentId"),
+          filename: nonEmptyBoundedString(LIMITS.FILENAME, "filename"),
+          mimeType: nonEmptyBoundedString(LIMITS.MIME_TYPE, "mimeType"),
+          sizeBytes: z.number().int().nonnegative().max(25 * 1024 * 1024),
+        })
+      )
+      .max(LIMITS.OPEN_THREAD_ATTACHMENTS),
+  }).optional(),
+});
+
+export const outboundAttachmentFromThreadBodySchema = strictObject({
+  messageId: nonEmptyBoundedString(LIMITS.MESSAGE_ID, "messageId"),
+  attachmentId: nonEmptyBoundedString(LIMITS.ATTACHMENT_ID, "attachmentId"),
+  filename: nonEmptyBoundedString(LIMITS.FILENAME, "filename"),
+  mimeType: nonEmptyBoundedString(LIMITS.MIME_TYPE, "mimeType"),
+  sizeBytes: z.number().int().min(1).max(25 * 1024 * 1024),
 });
 
 export const conversationIdBodySchema = strictObject({
-  conversationId: z.string().min(1, "conversationId is required"),
+  conversationId: nonEmptyBoundedString(LIMITS.CONVERSATION_ID, "conversationId"),
 });
 
 export const threadSummaryBodySchema = strictObject({
@@ -133,17 +150,17 @@ export const threadSummaryBodySchema = strictObject({
 });
 
 export const saveConversationBodySchema = strictObject({
-  messages: z.array(uiMessageSchema),
+  messages: z.array(uiMessageSchema).max(LIMITS.MESSAGES),
 });
 
 export const focusBlockBodySchema = strictObject({
   start: z.string().datetime(),
   durationMinutes: z.number().int().min(15).max(480).default(90),
-  summary: z.string().trim().min(1).max(120).optional(),
+  summary: nonEmptyBoundedString(120, "summary").optional(),
 });
 
 export const focusBlockDeleteBodySchema = strictObject({
-  eventId: z.string().min(1),
+  eventId: nonEmptyBoundedString(LIMITS.EVENT_ID, "eventId"),
 });
 
 export const reembedBodySchema = strictObject({
@@ -154,92 +171,130 @@ export const dailyBriefBodySchema = strictObject({
   provider: aiProviderSchema.optional(),
   refresh: z.boolean().optional(),
   stream: z.boolean().optional(),
-  timezone: z.string().trim().min(1, "timezone is required").max(100).optional(),
+  timezone: nonEmptyBoundedString(LIMITS.TIMEZONE, "timezone").optional(),
 });
 
 /** yyyy-MM month filter for calendar events. */
-export const eventsMonthQuerySchema = z.object({
+export const eventsMonthQuerySchema = strictObject({
   month: z
     .string()
     .regex(/^\d{4}-\d{2}$/, "month must be in yyyy-MM format")
     .optional(),
 });
 
-export const conversationIdParamSchema = z.string().trim().min(1).max(128);
+export const conversationIdParamSchema = nonEmptyBoundedString(LIMITS.CONVERSATION_ID, "conversationId");
 
 export const commitmentPatchBodySchema = strictObject({
-  commitmentId: z.string().min(1),
+  commitmentId: nonEmptyBoundedString(LIMITS.COMMITMENT_ID, "commitmentId"),
   status: z.enum(["open", "fulfilled", "dismissed"]),
 });
 
 export const commitmentConfirmBodySchema = strictObject({
-  commitmentId: z.string().min(1),
+  commitmentId: nonEmptyBoundedString(LIMITS.COMMITMENT_ID, "commitmentId"),
 });
 
-export const preBriefQuerySchema = z.object({
+export const preBriefQuerySchema = strictObject({
   attendeeEmail: z.string().email(),
   threadId: threadIdField.optional(),
 });
 
-const workingDaySlotSchema = z.object({
+const workingDaySlotSchema = strictObject({
   enabled: z.boolean(),
-  start: z.string().regex(/^\d{2}:\d{2}$/),
-  end: z.string().regex(/^\d{2}:\d{2}$/),
+  start: timeSlotSchema,
+  end: timeSlotSchema,
 });
 
-export const workingDaysStructuredSchema = z.object({
-  timezone: z.string().min(1).max(100),
-  days: z.record(z.string(), workingDaySlotSchema),
+export const workingDaysStructuredSchema = strictObject({
+  timezone: nonEmptyBoundedString(LIMITS.TIMEZONE, "timezone"),
+  days: z.record(weekdayKeySchema, workingDaySlotSchema),
 });
 
 export const preferencesPatchBodySchema = strictObject({
-  batchWindows: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1).max(6).optional(),
+  batchWindows: z.array(timeSlotSchema).min(1).max(LIMITS.BATCH_TIME_SLOTS).optional(),
   focusModeEnabled: z.boolean().optional(),
-  autoResponderTemplate: z.string().min(1).max(500).optional(),
+  autoResponderTemplate: nonEmptyBoundedString(LIMITS.AUTO_RESPONDER, "autoResponderTemplate").optional(),
   followUpDaysDefault: z.number().int().min(1).max(30).optional(),
-  timezone: z.string().min(1).max(100).optional(),
+  timezone: nonEmptyBoundedString(LIMITS.TIMEZONE, "timezone").optional(),
   workingDaysStructured: workingDaysStructuredSchema.nullable().optional(),
-  workingDaysTextOverride: z.string().max(2048).nullable().optional(),
+  workingDaysTextOverride: boundedString(LIMITS.WORKING_DAYS_TEXT, "workingDaysTextOverride")
+    .nullable()
+    .optional(),
   workingDaysSource: z.enum(["wizard", "override"]).optional(),
   onboardingCompletedAt: z.string().datetime().nullable().optional(),
 });
 
 export const contactBodySchema = strictObject({
   email: z.string().email(),
-  displayName: z.string().min(1).max(200).optional(),
+  displayName: nonEmptyBoundedString(LIMITS.DISPLAY_NAME, "displayName").optional(),
 });
 
 export const contactDismissBodySchema = strictObject({
   email: z.string().email(),
 });
 
+export const googleContactsDisconnectBodySchema = strictObject({
+  removeImported: z.boolean().optional(),
+});
+
+export const appContactsListQuerySchema = strictObject({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(LIMITS.PAGE_SIZE_MAX).default(20),
+  q: boundedString(LIMITS.SEARCH_QUERY, "q").optional(),
+});
+
 export const calendarEventPatchBodySchema = strictObject({
-  eventId: z.string().min(1),
+  eventId: nonEmptyBoundedString(LIMITS.EVENT_ID, "eventId"),
   slotStart: z.string().datetime(),
   durationMinutes: z.number().int().min(15).max(480).optional(),
 });
 
 export const contactsImportJsonBodySchema = strictObject({
-  source: z.enum(["gmail-sent", "google-contacts"]).optional(),
-  emails: z.array(z.string().email()).optional(),
-  text: z.string().max(50000).optional(),
+  source: z.enum(["gmail-sent", "google-contacts", "demo-contacts"]).optional(),
+  emails: z.array(z.string().email()).max(LIMITS.IMPORT_EMAILS).optional(),
+  text: boundedString(LIMITS.CONTACT_IMPORT_TEXT, "text").optional(),
+}).superRefine((data, ctx) => {
+  const hasSource = data.source != null;
+  const hasEmailsField = data.emails != null;
+  const hasNonEmptyEmails = (data.emails?.length ?? 0) > 0;
+  const hasText = Boolean(data.text?.trim());
+
+  if (hasEmailsField && !hasNonEmptyEmails) {
+    ctx.addIssue({
+      code: "custom",
+      message: "emails cannot be an empty array",
+      path: ["emails"],
+    });
+    return;
+  }
+
+  const isCompletelyEmpty = !hasSource && !hasEmailsField && data.text == null;
+  if (isCompletelyEmpty) return;
+
+  const hasValidPayload = hasSource || hasNonEmptyEmails || hasText;
+  if (!hasValidPayload) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Provide source, emails, or text",
+      path: ["source"],
+    });
+  }
 });
 
 export const snippetBodySchema = strictObject({
-  name: z.string().min(1).max(80),
-  body: z.string().min(1).max(10000),
+  name: nonEmptyBoundedString(80, "name"),
+  body: nonEmptyBoundedString(LIMITS.LONG_STRING, "body"),
 });
 
 export const snippetIdBodySchema = strictObject({
-  snippetId: z.string().min(1),
+  snippetId: nonEmptyBoundedString(LIMITS.SNIPPET_ID, "snippetId"),
 });
 
 export const exportTaskBodySchema = strictObject({
   threadId: threadIdField,
-  title: z.string().min(1).max(200),
-  description: z.string().min(1).max(10000),
-  teamId: z.string().min(1).optional(),
-  projectId: z.string().min(1).optional(),
+  title: nonEmptyBoundedString(LIMITS.SHORT_STRING, "title"),
+  description: nonEmptyBoundedString(LIMITS.LONG_STRING, "description"),
+  teamId: nonEmptyBoundedString(LIMITS.LINEAR_ID, "teamId").optional(),
+  projectId: nonEmptyBoundedString(LIMITS.LINEAR_ID, "projectId").optional(),
 });
 
 export const sendTimeSuggestBodySchema = strictObject({
@@ -248,16 +303,16 @@ export const sendTimeSuggestBodySchema = strictObject({
 });
 
 export const linearConnectBodySchema = strictObject({
-  accessToken: z.string().min(1),
-  teamId: z.string().min(1).optional(),
-  defaultProjectId: z.string().min(1).optional(),
+  accessToken: nonEmptyBoundedString(LIMITS.ACCESS_TOKEN, "accessToken"),
+  teamId: nonEmptyBoundedString(LIMITS.LINEAR_ID, "teamId").optional(),
+  defaultProjectId: nonEmptyBoundedString(LIMITS.LINEAR_ID, "defaultProjectId").optional(),
 });
 
 export const aiKeyBodySchema = strictObject({
   provider: aiProviderSchema,
-  apiKey: z.string().trim().min(8).max(512),
+  apiKey: z.string().trim().min(8).max(LIMITS.API_KEY),
 });
 
-export const aiKeyDeleteQuerySchema = z.object({
+export const aiKeyDeleteQuerySchema = strictObject({
   provider: aiProviderSchema,
 });

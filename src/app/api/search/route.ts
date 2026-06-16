@@ -4,6 +4,7 @@ import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { auth } from "@/lib/auth";
 import { assertAiAvailable } from "@/lib/ai/runtime";
 import { aiErrorResponse } from "@/lib/api/ai-error-response";
+import { getInboxIndexStatus } from "@/lib/backfill/inbox-index-status";
 import { semanticSearch } from "@/lib/search/semantic";
 import { searchBodySchema } from "@/lib/schemas/api";
 
@@ -25,12 +26,17 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, searchBodySchema);
   if (!parsed.ok) return parsed.response;
 
-  const results = await semanticSearch(
-    session.user.id,
-    parsed.data.query,
-    parsed.data.limit,
-    parsed.data.provider
-  );
+  const [results, indexStatus] = await Promise.all([
+    semanticSearch(session.user.id, parsed.data.query, parsed.data.limit, parsed.data.provider),
+    getInboxIndexStatus(session.user.id),
+  ]);
 
-  return NextResponse.json({ results });
+  return NextResponse.json({
+    results,
+    indexing: {
+      partial: !indexStatus.fullIndexComplete,
+      indexedCount: indexStatus.indexedCount,
+      inboxTotalThreads: indexStatus.inboxTotalThreads,
+    },
+  });
 }

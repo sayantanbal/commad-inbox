@@ -73,10 +73,24 @@
       "breakpoints": true
     },
     {
-      "idx": 10,
+      "idx": 11,
       "version": "7",
-      "when": 1781220000000,
-      "tag": "0011_overhaul",
+      "when": 1781224000000,
+      "tag": "0012_full_inbox_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781228000000,
+      "tag": "0013_calendar_watch_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781232000000,
+      "tag": "0014_google_contacts_connection",
       "breakpoints": true
     }
   ]

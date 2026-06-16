@@ -39,7 +39,7 @@ export function buildAgentMcpTools(
 
     tools[def.name] = tool({
       description: def.description,
-      inputSchema: z.object(def.shape),
+      inputSchema: z.object(def.shape).strict(),
       execute: async (input) => {
         const result = await def.handler(input as Record<string, unknown>);
         return toolResultToOutput(result);

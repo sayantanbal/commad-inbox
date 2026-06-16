@@ -1,17 +1,27 @@
 # What's Done — Command Inbox
 
 Status snapshot against [Command Inbox Product Plan](../.cursor/plans/command_inbox_product_plan_7b9adbaf.plan.md).  
-Last updated: **2026-06-14**.
+Last updated: **2026-06-16** (98+ plan Phase 0–4 code complete; Phase 5 ship pending).
 
 ## Executive summary
 
 | | |
 |---|---|
-| **Overall stage** | **Phase 6 — ship prep** (implementation ~complete; submission artifacts outstanding) |
-| **Code** | Phases 0–5 implemented in repo; Phase 6 polish/docs largely done |
-| **Blockers to submit** | Demo video, published social posts, production smoke-test sign-off |
-| **Tests** | 9 unit/smoke tests passing (`bun test src/lib/__tests__`); no property/integration suite |
-| **Plan file todos** | Frontmatter still marks all phases `pending` — **stale**; use this doc instead |
+| **Overall stage** | **98+ plan Phase 0–4 done**; Phase 5 (deploy, video, social) outstanding |
+| **Code** | Full INBOX index, API rate limits, calendar webhook auth, `google-proxy.ts`, agent/M-key pipeline |
+| **Blockers to submit** | Demo video, deploy verify, social posts, judge OAuth test users |
+| **Tests** | **30** unit/smoke tests passing (`bun test src/lib/__tests__`) |
+| **Migrations** | Run `bun run db:migrate` for `0012_full_inbox_index`, `0013_calendar_watch_channel` |
+
+### 98+ hackathon plan (`HACKATHON_98_PLUS_PLAN.md`)
+
+| Phase | Goal | Status |
+|-------|------|--------|
+| 0 — Full INBOX index | pgvector over entire inbox + progress UI | ✅ |
+| 1 — Engineering floor | Rate limits, calendar webhook token auth | ✅ |
+| 3 — Zero Corsair bypass | `google-proxy.ts`, events-based busy, demo contacts | ✅ |
+| 4 — NL calendar unified | Webhook fetch, agent/M-key bridge, reschedule modal | ✅ |
+| 5 — Ship | Video, deploy, social | ☐ |
 
 ---
 

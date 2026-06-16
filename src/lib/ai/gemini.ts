@@ -2,25 +2,23 @@ import { generateJsonWithProvider, generateTextWithProvider } from "@/lib/ai/gen
 import { embedWithProvider } from "@/lib/ai/embed";
 import { getDefaultProvider } from "@/lib/ai/with-fallback";
 import { isRateLimitError } from "@/lib/ai/rate-limit";
-import { z } from "zod";
+import { boundedJsonValue, type BoundedJsonValue } from "@/lib/schemas/primitives";
 
 export { isRateLimitError, isRateLimitError as isGeminiQuotaError };
-
-const looseJsonSchema = z.record(z.string(), z.unknown());
 
 /** @deprecated Prefer generateJsonWithProvider */
 export async function geminiGenerateJson(
   userId: string,
   prompt: string,
   system: string
-): Promise<unknown> {
+): Promise<BoundedJsonValue> {
   const preferred = await getDefaultProvider(userId);
   const { data } = await generateJsonWithProvider(
     userId,
     preferred,
     prompt,
     system,
-    looseJsonSchema
+    boundedJsonValue
   );
   return data;
 }

@@ -7,6 +7,7 @@ import {
 import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
+import { enforceUserRateLimit } from "@/lib/api/user-rate-limit";
 import { resolveAgentModelProvider } from "@/lib/ai/with-fallback";
 import { getChatModel } from "@/lib/ai/models";
 import { resolveApiKey } from "@/lib/ai/key-store";
@@ -17,12 +18,16 @@ import { NoAiProviderError } from "@/lib/ai/with-fallback";
 import { assertAiAvailable } from "@/lib/ai/runtime";
 import { aiErrorResponse } from "@/lib/api/ai-error-response";
 import { agentChatBodySchema } from "@/lib/schemas/api";
+import { listOutboundAttachmentMeta } from "@/lib/gmail/outbound-attachment";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
+
+  const rateLimited = enforceUserRateLimit(auth.userId, "agent-chat");
+  if (rateLimited) return rateLimited;
 
   try {
     await assertAiAvailable(auth.userId);
@@ -41,6 +46,11 @@ export async function POST(request: Request) {
 
   try {
     const mentionContext = parsed.data.mentionedContacts ?? [];
+    const pendingIds = parsed.data.pendingAttachmentIds ?? [];
+    const stagedAttachments =
+      pendingIds.length > 0
+        ? await listOutboundAttachmentMeta(auth.userId, pendingIds)
+        : [];
     const tools = buildAgentMcpTools(auth.tenant, auth.userId, auth.userEmail);
     const activeProvider = await resolveAgentModelProvider(auth.userId, provider);
     const apiKey = await resolveApiKey(auth.userId, activeProvider);
@@ -55,7 +65,12 @@ export async function POST(request: Request) {
 
     const result = streamText({
       model,
-      system: buildAgentSystemPrompt(auth.userEmail, mentionContext),
+      system: buildAgentSystemPrompt(
+        auth.userEmail,
+        mentionContext,
+        stagedAttachments,
+        parsed.data.openThread ?? null
+      ),
       messages: await convertToModelMessages(messages),
       tools,
       stopWhen: stepCountIs(8),

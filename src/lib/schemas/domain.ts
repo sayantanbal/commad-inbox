@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { LIMITS } from "@/lib/schemas/limits";
+import { boundedString, nonEmptyBoundedString, strictObject } from "@/lib/schemas/primitives";
 
 const TRIAGE_LANES = ["reply", "schedule", "fyi", "done"] as const;
 export type TriageLane = (typeof TRIAGE_LANES)[number];
@@ -13,29 +15,32 @@ export type DraftTone = (typeof DRAFT_TONES)[number];
 export const draftToneSchema = z.enum(DRAFT_TONES);
 
 /** Gmail thread id from API clients. */
-export const threadIdField = z.string().min(1, "threadId is required");
+export const threadIdField = nonEmptyBoundedString(LIMITS.THREAD_ID, "threadId");
 
 /**
  * Scheduling intent as stored in Postgres / returned by the classifier.
  * Times are ISO 8601 strings until mapped to Date for UI.
  */
-export const schedulingIntentStoredSchema = z
-  .object({
-    proposedTimes: z.array(
+export const schedulingIntentStoredSchema = strictObject({
+  proposedTimes: z
+    .array(
       z.string().datetime({ message: "proposedTimes entries must be ISO 8601 datetimes" })
-    ),
-    attendees: z.array(z.string().email({ message: "attendees must be valid email addresses" })),
-    duration: z
-      .number()
-      .int({ message: "duration must be a whole number of minutes" })
-      .positive({ message: "duration must be positive" })
-      .max(480, { message: "duration must be at most 480 minutes" }),
-    confidence: z
-      .number()
-      .min(0, { message: "confidence must be between 0 and 1" })
-      .max(1, { message: "confidence must be between 0 and 1" }),
-  })
-  .strict();
+    )
+    .min(1)
+    .max(10),
+  attendees: z
+    .array(z.string().email({ message: "attendees must be valid email addresses" }))
+    .max(LIMITS.EMAIL_RECIPIENTS),
+  duration: z
+    .number()
+    .int({ message: "duration must be a whole number of minutes" })
+    .positive({ message: "duration must be positive" })
+    .max(480, { message: "duration must be at most 480 minutes" }),
+  confidence: z
+    .number()
+    .min(0, { message: "confidence must be between 0 and 1" })
+    .max(1, { message: "confidence must be between 0 and 1" }),
+});
 
 export type SchedulingIntentStored = z.infer<typeof schedulingIntentStoredSchema>;
 
@@ -50,41 +55,36 @@ export const suggestedActionTypeSchema = z.enum([
 
 export type SuggestedActionType = z.infer<typeof suggestedActionTypeSchema>;
 
-export const suggestedActionSchema = z
-  .object({
-    label: z.string().min(1),
-    type: suggestedActionTypeSchema,
-    threadId: threadIdField.optional(),
-    draftText: z.string().optional(),
-  })
-  .strict();
+export const suggestedActionSchema = strictObject({
+  label: nonEmptyBoundedString(LIMITS.AI_ACTION_LABEL, "label"),
+  type: suggestedActionTypeSchema,
+  threadId: threadIdField.optional(),
+  draftText: boundedString(LIMITS.AI_DRAFT_TEXT, "draftText").optional(),
+});
 
 export type SuggestedAction = z.infer<typeof suggestedActionSchema>;
 
-export const aiSummarySchema = z
-  .object({
-    bullets: z.array(z.string()).min(1).max(6),
-    actions: z.array(suggestedActionSchema).max(4),
-  })
-  .strict();
+export const aiSummarySchema = strictObject({
+  bullets: z
+    .array(nonEmptyBoundedString(LIMITS.AI_SUMMARY_BULLET, "bullet"))
+    .min(1)
+    .max(6),
+  actions: z.array(suggestedActionSchema).max(LIMITS.BRIEF_ACTIONS),
+});
 
 export type AiSummary = z.infer<typeof aiSummarySchema>;
 
-export const dailyBriefItemSchema = z
-  .object({
-    label: z.string().min(1),
-    text: z.string().min(1),
-    actions: z.array(suggestedActionSchema).max(3).optional(),
-  })
-  .strict();
+export const dailyBriefItemSchema = strictObject({
+  label: nonEmptyBoundedString(LIMITS.AI_ACTION_LABEL, "label"),
+  text: nonEmptyBoundedString(LIMITS.AI_SUMMARY_BULLET, "text"),
+  actions: z.array(suggestedActionSchema).max(3).optional(),
+});
 
-export const dailyBriefSchema = z
-  .object({
-    greeting: z.string().min(1),
-    subtitle: z.string().min(1),
-    items: z.array(dailyBriefItemSchema).min(1).max(8),
-  })
-  .strict();
+export const dailyBriefSchema = strictObject({
+  greeting: nonEmptyBoundedString(LIMITS.AI_LABEL, "greeting"),
+  subtitle: nonEmptyBoundedString(LIMITS.AI_LABEL, "subtitle"),
+  items: z.array(dailyBriefItemSchema).min(1).max(LIMITS.BRIEF_ITEMS),
+});
 
 export type DailyBrief = z.infer<typeof dailyBriefSchema>;
 export type DailyBriefItem = z.infer<typeof dailyBriefItemSchema>;
@@ -102,23 +102,19 @@ export const COMMITMENT_STATUSES = [
 export type CommitmentStatus = (typeof COMMITMENT_STATUSES)[number];
 export const commitmentStatusSchema = z.enum(COMMITMENT_STATUSES);
 
-export const extractedCommitmentSchema = z
-  .object({
-    text: z.string().min(1),
-    direction: commitmentDirectionSchema,
-    counterpartyEmail: z.string().email(),
-    dueDate: z.string().datetime().nullable(),
-    confidence: z.number().min(0).max(1),
-  })
-  .strict();
+export const extractedCommitmentSchema = strictObject({
+  text: nonEmptyBoundedString(LIMITS.MEDIUM_STRING, "text"),
+  direction: commitmentDirectionSchema,
+  counterpartyEmail: z.string().email(),
+  dueDate: z.string().datetime().nullable(),
+  confidence: z.number().min(0).max(1),
+});
 
 export type ExtractedCommitment = z.infer<typeof extractedCommitmentSchema>;
 
-export const commitmentExtractionResultSchema = z
-  .object({
-    commitments: z.array(extractedCommitmentSchema).max(3),
-  })
-  .strict();
+export const commitmentExtractionResultSchema = strictObject({
+  commitments: z.array(extractedCommitmentSchema).max(LIMITS.COMMITMENTS),
+});
 
 export type CommitmentExtractionResult = z.infer<typeof commitmentExtractionResultSchema>;
 
@@ -126,45 +122,39 @@ export const CONTACT_WARMTH = ["cold", "warm", "active", "new"] as const;
 export type ContactWarmth = (typeof CONTACT_WARMTH)[number];
 export const contactWarmthSchema = z.enum(CONTACT_WARMTH);
 
-export const meetingBriefThreadSchema = z
-  .object({
-    subject: z.string(),
-    snippet: z.string(),
-    date: z.string(),
-  })
-  .strict();
+export const meetingBriefThreadSchema = strictObject({
+  subject: boundedString(LIMITS.EMAIL_SUBJECT, "subject"),
+  snippet: boundedString(LIMITS.MEDIUM_STRING, "snippet"),
+  date: boundedString(LIMITS.SHORT_STRING, "date"),
+});
 
-export const meetingBriefStoredSchema = z
-  .object({
-    attendeeName: z.string(),
-    attendeeEmail: z.string().email(),
-    recentThreads: z.array(meetingBriefThreadSchema).max(3),
-    openCommitments: z.array(z.string()).max(5),
-    attachmentsNote: z.string(),
-    toneSummary: z.string(),
-  })
-  .strict();
+export const meetingBriefStoredSchema = strictObject({
+  attendeeName: nonEmptyBoundedString(LIMITS.DISPLAY_NAME, "attendeeName"),
+  attendeeEmail: z.string().email(),
+  recentThreads: z.array(meetingBriefThreadSchema).max(3),
+  openCommitments: z
+    .array(nonEmptyBoundedString(LIMITS.MEDIUM_STRING, "commitment"))
+    .max(5),
+  attachmentsNote: boundedString(LIMITS.MEDIUM_STRING, "attachmentsNote"),
+  toneSummary: boundedString(LIMITS.MEDIUM_STRING, "toneSummary"),
+});
 
 export type MeetingBriefStored = z.infer<typeof meetingBriefStoredSchema>;
 
-export const sendTimeSuggestionSchema = z
-  .object({
-    suggestedAt: z.string().datetime(),
-    reason: z.string().min(1),
-    confidence: z.enum(["high", "medium", "low"]),
-  })
-  .strict();
+export const sendTimeSuggestionSchema = strictObject({
+  suggestedAt: z.string().datetime(),
+  reason: nonEmptyBoundedString(LIMITS.MEDIUM_STRING, "reason"),
+  confidence: z.enum(["high", "medium", "low"]),
+});
 
 export type SendTimeSuggestion = z.infer<typeof sendTimeSuggestionSchema>;
 
 /** Stored / validated classifier result (schedulingIntent may be null). */
-export const classificationResultSchema = z
-  .object({
-    priority: prioritySchema,
-    lane: triageLaneSchema,
-    schedulingIntent: schedulingIntentStoredSchema.nullable(),
-  })
-  .strict();
+export const classificationResultSchema = strictObject({
+  priority: prioritySchema,
+  lane: triageLaneSchema,
+  schedulingIntent: schedulingIntentStoredSchema.nullable(),
+});
 
 export type ClassificationResult = z.infer<typeof classificationResultSchema>;
 
@@ -174,13 +164,11 @@ export type ClassificationResult = z.infer<typeof classificationResultSchema>;
  * JSON-schema validator (anyOf branch missing `type`).
  * Omit schedulingIntent when there is no meeting intent.
  */
-export const classificationAiOutputSchema = z
-  .object({
-    priority: prioritySchema,
-    lane: triageLaneSchema,
-    schedulingIntent: schedulingIntentStoredSchema.optional(),
-  })
-  .strict();
+export const classificationAiOutputSchema = strictObject({
+  priority: prioritySchema,
+  lane: triageLaneSchema,
+  schedulingIntent: schedulingIntentStoredSchema.optional(),
+});
 
 export type ClassificationAiOutput = z.infer<typeof classificationAiOutputSchema>;
 

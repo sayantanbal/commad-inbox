@@ -6,10 +6,10 @@ A keyboard-first Gmail + Google Calendar command center built on [Corsair](https
 
 - **Auth & multi-tenancy** — Better Auth + Google OAuth; one Corsair tenant per user
 - **AI triage** — Gemini or OpenAI classifies inbound mail into lanes with scheduling intent extraction
-- **Semantic search** (`/`) — pgvector embeddings over classified threads; provider switcher with auto re-embed
-- **Advanced search** (`Mod+Shift+F`) — Corsair Gmail API search across full mailbox history (sender, dates, lane, attachments)
+- **Semantic search** (`/`) — pgvector over **indexed inbox threads** (last 50 classified immediately on connect; full INBOX indexes in background with progress banner)
+- **Advanced search** (`Mod+Shift+F`) — Corsair Gmail `threads.list({ q })` across **full mailbox history** (sender, dates, lane, attachments)
 - **Hero workflow** (`M`) — inline availability → calendar invite + confirmation draft
-- **Agent chat** — Corsair MCP discovery tools + approval-gated `send_email` / `create_calendar_invite`
+- **Agent chat** — Corsair MCP discovery tools + approval-gated `send_email` / `create_calendar_invite`; native Gmail attachments (upload or forward from thread, up to ~20 MB per file) with approval preview
 - **Command palette & shortcuts** — Superhuman-style keys; PWA + mobile tabs
 
 ## Architecture
@@ -50,7 +50,7 @@ flowchart LR
     ui --> vectors
 ```
 
-**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair processes event → AI classify + pgvector embed → Pusher → UI. Inbox reads go through the **Corsair SDK** (`tenant.gmail.api.*`, `tenant.googlecalendar.api.*`), which handles OAuth and caches mail in Postgres. App-owned tables store lanes, snoozes, meetings, and embeddings for sub-second semantic search over classified threads.
+**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair processes event → AI classify + pgvector embed → Pusher → UI. Inbox reads go through the **Corsair SDK** (`tenant.gmail.api.*`, `tenant.googlecalendar.api.*`), which handles OAuth and caches mail in Postgres. App-owned tables store lanes, snoozes, meetings, and embeddings. **Semantic search (`/`)** queries locally indexed threads; **advanced search (`Mod+Shift+F`)** hits Gmail history via Corsair.
 
 ## Stack
 
@@ -59,7 +59,7 @@ flowchart LR
 | App | Next.js 15, React 19, Tailwind, shadcn/ui |
 | Data | Neon Postgres, Drizzle, pgvector |
 | Integrations | Corsair SDK (`@corsair-dev/gmail`, `@corsair-dev/googlecalendar`, `@corsair-dev/mcp`) |
-| AI | Vercel AI SDK — GPT-5 Nano + Gemini 2.5 Flash (OpenAI first, fallback on rate limits) |
+| AI | Vercel AI SDK — GPT-5 Nano + Gemini 2.5 Flash (OpenAI first, fallback on provider rate limits); per-user API rate limits on chat/send/draft |
 | Auth | Better Auth (Google) |
 | Realtime | Pusher Channels |
 

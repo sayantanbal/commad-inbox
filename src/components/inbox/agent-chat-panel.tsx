@@ -13,6 +13,7 @@ import {
 import { Bot, CalendarRange, Clock, Inbox, Loader2, Plus, Send, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentToolApproval } from "@/components/inbox/agent-tool-approval";
+import { AttachmentStaging } from "@/components/inbox/attachment-staging";
 import { AgentMentionInput, type MentionContact } from "@/components/inbox/agent-mention-input";
 import { AiProviderSelect } from "@/components/inbox/ai-provider-select";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import {
   loadAgentConversationApi,
   saveAgentConversationApi,
   type AgentConversationItem,
+  type OutboundAttachmentMeta,
 } from "@/lib/inbox/client-api";
 import { WELCOME_MESSAGE_ID } from "@/lib/agent/constants";
 import { cn } from "@/lib/utils";
@@ -67,7 +69,8 @@ function renderToolPart(
   part: ToolPart,
   addToolApprovalResponse: ReturnType<typeof useChat>["addToolApprovalResponse"],
   onEdit?: (toolName: string, input: Record<string, unknown>) => void,
-  onToolApproved?: (toolName: string, input: Record<string, unknown>) => void
+  onToolApproved?: (toolName: string, input: Record<string, unknown>) => void,
+  shouldBridgeInviteToInbox?: (input: Record<string, unknown>) => boolean
 ) {
   const toolName = getToolName(part);
 
@@ -75,6 +78,7 @@ function renderToolPart(
     return (
       <AgentToolApproval
         key={part.toolCallId}
+        shouldBridgeInviteToInbox={shouldBridgeInviteToInbox}
         part={part}
         onApprove={(id) => {
           if (part.input && typeof part.input === "object") {
@@ -173,6 +177,8 @@ export function AgentChatPanel({
   onOpenCalendar,
   workspaceActive,
   contacts = [],
+  openThread,
+  shouldBridgeInviteToInbox,
   onEditTool,
   onToolApproved,
 }: {
@@ -181,11 +187,23 @@ export function AgentChatPanel({
   onOpenCalendar?: () => void;
   workspaceActive?: "inbox" | "calendar" | null;
   contacts?: MentionContact[];
+  openThread?: {
+    threadId: string;
+    attachments: Array<{
+      messageId: string;
+      attachmentId: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+    }>;
+  } | null;
+  shouldBridgeInviteToInbox?: (input: Record<string, unknown>) => boolean;
   onEditTool?: (toolName: string, input: Record<string, unknown>) => void;
   onToolApproved?: (toolName: string, input: Record<string, unknown>) => void;
 } = {}) {
   const [input, setInput] = useState("");
   const [mentions, setMentions] = useState<MentionContact[]>([]);
+  const [stagedAttachments, setStagedAttachments] = useState<OutboundAttachmentMeta[]>([]);
   const [conversations, setConversations] = useState<AgentConversationItem[]>([]);
   const [openTabIds, setOpenTabIds] = useState<string[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -201,12 +219,29 @@ export function AgentChatPanel({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSendRef = useRef<string | null>(null);
   const mentionsRef = useRef<MentionContact[]>([]);
+  const stagedAttachmentsRef = useRef<OutboundAttachmentMeta[]>([]);
+  const openThreadRef = useRef(openThread);
   const historyRef = useRef<HTMLDivElement>(null);
   const autoOpenedRef = useRef(false);
 
   providerRef.current = provider;
   conversationIdRef.current = conversationId;
   mentionsRef.current = mentions;
+  stagedAttachmentsRef.current = stagedAttachments;
+  openThreadRef.current = openThread;
+
+  const handleToolApproved = useCallback(
+    (toolName: string, toolInput: Record<string, unknown>) => {
+      if (toolName === "send_email" || toolName === "schedule_send") {
+        const usedIds = asStringArray(toolInput.attachmentIds);
+        if (usedIds.length > 0) {
+          setStagedAttachments((prev) => prev.filter((item) => !usedIds.includes(item.id)));
+        }
+      }
+      onToolApproved?.(toolName, toolInput);
+    },
+    [onToolApproved]
+  );
 
   const chatId = conversationId ?? "draft";
 
@@ -222,6 +257,8 @@ export function AgentChatPanel({
             provider: providerRef.current,
             conversationId: conversationIdRef.current ?? undefined,
             mentionedContacts: mentionsRef.current,
+            pendingAttachmentIds: stagedAttachmentsRef.current.map((item) => item.id),
+            openThread: openThreadRef.current ?? undefined,
           },
         }),
       }),
@@ -280,6 +317,7 @@ export function AgentChatPanel({
       setOpenTabIds((prev) => [...prev, conversation.id]);
       setInitialMessages([welcomeMessage()]);
       setMessages([welcomeMessage()]);
+      setStagedAttachments([]);
       setHistoryOpen(false);
       await refreshConversations();
     } catch (err) {
@@ -604,7 +642,13 @@ export function AgentChatPanel({
                 }
 
                 if (isToolUIPart(part)) {
-                  return renderToolPart(part, addToolApprovalResponse, onEditTool, onToolApproved);
+                  return renderToolPart(
+                    part,
+                    addToolApprovalResponse,
+                    onEditTool,
+                    handleToolApproved,
+                    shouldBridgeInviteToInbox
+                  );
                 }
 
                 return null;
@@ -636,6 +680,12 @@ export function AgentChatPanel({
             disabled={isBusy}
           />
         </div>
+        <AttachmentStaging
+          attachments={stagedAttachments}
+          onChange={setStagedAttachments}
+          disabled={isBusy}
+          className="mb-2"
+        />
         <div className="flex items-center gap-2 rounded-full border border-hairline bg-canvas pl-4 pr-1 py-1 transition-colors focus-within:border-[color:var(--color-primary-focus)]/60">
           <AgentMentionInput
             value={input}

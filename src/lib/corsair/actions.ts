@@ -1,5 +1,6 @@
 import { addMinutes } from "date-fns";
 import type { CorsairInstance } from "@/lib/corsair";
+import type { RawEmailAttachment } from "@/lib/gmail/raw-message";
 import { buildRawEmail } from "@/lib/gmail/raw-message";
 import { replyRecipients, resolveMeetingAttendees } from "@/lib/inbox/recipients";
 
@@ -37,6 +38,7 @@ export async function sendGmailMessage(
     threadId?: string;
     inReplyTo?: string;
     references?: string;
+    attachments?: RawEmailAttachment[];
   }
 ): Promise<{ messageId: string; threadId?: string }> {
   const raw = buildRawEmail(params);

@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   json,
@@ -35,6 +36,16 @@ export const commitmentStatusEnum = pgEnum("commitment_status", [
 ]);
 export const contactWarmthEnum = pgEnum("contact_warmth", ["cold", "warm", "active", "new"]);
 export const externalProviderEnum = pgEnum("external_provider", ["linear", "notion", "github"]);
+export const outboundAttachmentSourceEnum = pgEnum("outbound_attachment_source", [
+  "upload",
+  "thread_forward",
+]);
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 import type {
   DailyBrief,
@@ -53,8 +64,12 @@ export const users = pgTable("users", {
   name: text("name"),
   corsairTenantId: text("corsair_tenant_id"),
   backfillCompletedAt: timestamp("backfill_completed_at", { withTimezone: true }),
+  fullIndexCompletedAt: timestamp("full_index_completed_at", { withTimezone: true }),
+  inboxIndexTotalThreads: integer("inbox_index_total_threads"),
   gmailWatchExpiresAt: timestamp("gmail_watch_expires_at", { withTimezone: true }),
   calendarWatchExpiresAt: timestamp("calendar_watch_expires_at", { withTimezone: true }),
+  calendarWatchChannelId: text("calendar_watch_channel_id"),
+  calendarWatchChannelToken: text("calendar_watch_channel_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -121,12 +136,36 @@ export const scheduledSends = pgTable(
     to: json("to").$type<string[]>().notNull(),
     subject: text("subject").notNull(),
     body: text("body").notNull(),
+    attachmentIds: json("attachment_ids").$type<string[]>().default([]).notNull(),
     sendAt: timestamp("send_at", { withTimezone: true }).notNull(),
     status: scheduledSendStatusEnum("status").notNull().default("pending"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("scheduled_sends_time_idx").on(table.status, table.sendAt)]
+);
+
+export const outboundAttachments = pgTable(
+  "outbound_attachments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    data: bytea("data").notNull(),
+    source: outboundAttachmentSourceEnum("source").notNull(),
+    sourceMessageId: text("source_message_id"),
+    sourceAttachmentId: text("source_attachment_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("outbound_attachments_user_idx").on(table.userId),
+    index("outbound_attachments_expires_idx").on(table.expiresAt),
+  ]
 );
 
 export const threadMeetings = pgTable(
@@ -279,6 +318,16 @@ export const appContacts = pgTable(
   ]
 );
 
+export const googleContactsConnections = pgTable("google_contacts_connections", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  encryptedRefreshToken: text("encrypted_refresh_token").notNull(),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const contactDismissals = pgTable(
   "contact_dismissals",
   {
@@ -416,6 +465,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   snoozes: many(snoozes),
   drafts: many(drafts),
   scheduledSends: many(scheduledSends),
+  outboundAttachments: many(outboundAttachments),
   threadMeetings: many(threadMeetings),
   agentConversations: many(agentConversations),
   threadSummaries: many(threadSummaries),

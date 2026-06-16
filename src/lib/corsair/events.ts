@@ -33,20 +33,18 @@ function parseEventDate(value?: { dateTime?: string; date?: string }): Date | nu
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export async function fetchEventsForTenant(
+export async function fetchEventsInRange(
   tenant: ReturnType<CorsairInstance["withTenant"]>,
-  anchor = new Date()
+  timeMin: Date,
+  timeMax: Date
 ): Promise<CalendarEvent[]> {
   try {
-    const timeMin = startOfMonth(anchor).toISOString();
-    const timeMax = endOfMonth(anchor).toISOString();
-
     const response = await tenant.googlecalendar.api.events.getMany({
-      timeMin,
-      timeMax,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
-      maxResults: 100,
+      maxResults: 250,
     });
 
     const events: CalendarEvent[] = [];
@@ -82,4 +80,11 @@ export async function fetchEventsForTenant(
     }
     throw error;
   }
+}
+
+export async function fetchEventsForTenant(
+  tenant: ReturnType<CorsairInstance["withTenant"]>,
+  anchor = new Date()
+): Promise<CalendarEvent[]> {
+  return fetchEventsInRange(tenant, startOfMonth(anchor), endOfMonth(anchor));
 }

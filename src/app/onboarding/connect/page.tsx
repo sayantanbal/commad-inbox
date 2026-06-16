@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { isTenantFullyConnected } from "@/lib/corsair/connection";
 import { getOnboardingRedirectPath } from "@/lib/onboarding/status";
 import { Button } from "@/components/ui/button";
+import { ConnectSignOut } from "./connect-sign-out";
 
 interface ConnectPageProps {
   searchParams: Promise<{
@@ -105,9 +106,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
             </p>
           </div>
 
-          <p className="mt-6 text-center type-caption text-ink-muted-48">
-            Signed in as {session.user.email}
-          </p>
+          <ConnectSignOut email={session.user.email} />
         </div>
       </main>
     </div>

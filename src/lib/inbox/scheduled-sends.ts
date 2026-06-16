@@ -3,6 +3,8 @@ import type { CorsairInstance } from "@/lib/corsair";
 import { sendGmailMessage } from "@/lib/corsair/actions";
 import { db } from "@/lib/db";
 import { scheduledSends } from "@/lib/db/schema";
+import { resolveAttachmentsForSend } from "@/lib/gmail/resolve-attachments";
+import { deleteOutboundAttachments } from "@/lib/gmail/outbound-attachment";
 
 export async function queueSend(
   userId: string,
@@ -12,8 +14,14 @@ export async function queueSend(
     body: string;
     threadId?: string;
     sendAt: Date;
+    attachmentIds?: string[];
   }
 ): Promise<{ id: string; sendAt: Date }> {
+  const attachmentIds = params.attachmentIds ?? [];
+  if (attachmentIds.length > 0) {
+    await resolveAttachmentsForSend(userId, attachmentIds);
+  }
+
   const id = crypto.randomUUID();
   await db.insert(scheduledSends).values({
     id,
@@ -22,6 +30,7 @@ export async function queueSend(
     to: params.to,
     subject: params.subject,
     body: params.body,
+    attachmentIds,
     sendAt: params.sendAt,
     status: "pending",
   });
@@ -74,13 +83,18 @@ export async function dispatchScheduledSend(
   if (!claimed) return null;
 
   try {
+    const attachments = await resolveAttachmentsForSend(userId, claimed.attachmentIds);
     const result = await sendGmailMessage(tenant, {
       from: fromEmail,
       to: claimed.to,
       subject: claimed.subject,
       bodyHtml: claimed.body,
       threadId: claimed.threadId ?? undefined,
+      attachments,
     });
+    if (claimed.attachmentIds.length > 0) {
+      await deleteOutboundAttachments(userId, claimed.attachmentIds);
+    }
     return { messageId: result.messageId };
   } catch (error) {
     await db.update(scheduledSends).set({ status: "failed" }).where(eq(scheduledSends.id, id));

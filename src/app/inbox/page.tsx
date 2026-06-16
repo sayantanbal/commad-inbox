@@ -7,8 +7,10 @@ import { GmailApiDisabledError } from "@/lib/corsair/api-errors";
 import {
   needsClassificationBoost,
   triggerInboxBackfill,
+  triggerFullInboxIndex,
   triggerInboxReclassify,
 } from "@/lib/backfill/inbox-backfill";
+import { getInboxIndexStatus } from "@/lib/backfill/inbox-index-status";
 import { isBackfillComplete } from "@/lib/users/backfill-status";
 import { requireConnectedTenant } from "@/lib/corsair/tenant";
 import { getSnoozesForUser } from "@/lib/inbox/snoozes";
@@ -28,8 +30,13 @@ function isAuthError(error: unknown): boolean {
   );
 }
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ openSettings?: string; googleContacts?: string }>;
+}) {
   const { tenant, userId, userEmail } = await requireConnectedTenant();
+  const params = await searchParams;
 
   const onboardingPath = await getOnboardingRedirectPath(userId);
   if (onboardingPath !== "/inbox") {
@@ -42,11 +49,14 @@ export default async function InboxPage() {
 
   try {
     const backfillComplete = await isBackfillComplete(userId);
+    const indexStatus = await getInboxIndexStatus(userId);
     const { serialized, threads, classifications } = await loadInboxDataForUser(tenant, userId);
     const snoozes = await getSnoozesForUser(userId);
 
     if (!backfillComplete) {
       triggerInboxBackfill(userId);
+    } else if (!indexStatus.fullIndexComplete) {
+      triggerFullInboxIndex(userId);
     } else if (needsClassificationBoost(classifications.length, threads.length)) {
       triggerInboxReclassify(userId);
     }
@@ -57,10 +67,13 @@ export default async function InboxPage() {
         userId={userId}
         userEmail={userEmail}
         backfillComplete={backfillComplete}
+        indexStatus={indexStatus}
         initialSnoozes={snoozes.map((snooze) => ({
           threadId: snooze.threadId,
           until: snooze.until.toISOString(),
         }))}
+        initialOpenSettings={params.openSettings ?? null}
+        googleContactsReturn={params.googleContacts ?? null}
       />
     );
   } catch (error) {

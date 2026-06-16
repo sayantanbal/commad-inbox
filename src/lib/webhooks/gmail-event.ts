@@ -7,16 +7,14 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { broadcastInboxEvent } from "@/lib/realtime/pusher";
 import { eq } from "drizzle-orm";
+import { shouldClassifyGmailEvent } from "@/lib/webhooks/gmail-event-filter";
+
+export { shouldClassifyGmailEvent } from "@/lib/webhooks/gmail-event-filter";
 
 type GmailWebhookEvent = {
   type?: string;
   message?: { threadId?: string };
 };
-
-export function shouldClassifyGmailEvent(body: unknown): boolean {
-  const event = body as GmailWebhookEvent;
-  return event.type === "messageReceived" && Boolean(event.message?.threadId);
-}
 
 export async function handleGmailMessageChanged(
   tenantId: string,

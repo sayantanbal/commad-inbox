@@ -2,7 +2,7 @@ import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { embedWithProvider } from "@/lib/ai/embed";
 import type { AiProvider } from "@/lib/ai/providers";
 import { db } from "@/lib/db";
-import { classifications, users } from "@/lib/db/schema";
+import { classifications } from "@/lib/db/schema";
 
 export type SearchHit = {
   threadId: string;
@@ -30,8 +30,8 @@ export async function semanticSearch(
   limit = 20,
   provider: AiProvider = "gemini"
 ): Promise<SearchHit[]> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user?.backfillCompletedAt) {
+  const hasEmbeddings = await hasSearchableEmbeddings(userId, provider);
+  if (!hasEmbeddings) {
     return [];
   }
 

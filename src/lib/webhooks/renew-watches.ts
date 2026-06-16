@@ -7,6 +7,11 @@ import { isTenantFullyConnected } from "@/lib/corsair/connection";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { env, getAppUrl } from "@/lib/env";
+import {
+  buildCalendarWebhookUrl,
+  calendarWatchSkipReason,
+  canRegisterCalendarWatch,
+} from "@/lib/webhooks/calendar-watch-url";
 import { registerCalendarWatch, registerGmailWatch } from "@/lib/webhooks/watch-register";
 
 /** Renew if missing or expiring within this window. */
@@ -29,13 +34,20 @@ function needsRenewal(expiresAt: Date | null | undefined): boolean {
 async function saveWatchExpirations(
   tenantId: string,
   gmailExpiresAt: Date | null,
-  calendarExpiresAt: Date | null
+  calendarExpiresAt: Date | null,
+  calendarChannel?: { channelId: string; channelToken: string }
 ): Promise<void> {
   await db
     .update(users)
     .set({
       ...(gmailExpiresAt ? { gmailWatchExpiresAt: gmailExpiresAt } : {}),
       ...(calendarExpiresAt ? { calendarWatchExpiresAt: calendarExpiresAt } : {}),
+      ...(calendarChannel
+        ? {
+            calendarWatchChannelId: calendarChannel.channelId,
+            calendarWatchChannelToken: calendarChannel.channelToken,
+          }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(users.id, tenantId));
@@ -54,16 +66,29 @@ export async function renewGmailWatch(tenantId: string): Promise<Date | null> {
   return expiration;
 }
 
-export async function renewCalendarWatch(tenantId: string): Promise<Date | null> {
+export async function renewCalendarWatch(
+  tenantId: string
+): Promise<{ expiration: Date | null; channelId: string; channelToken: string }> {
   const appUrl = getAppUrl();
-  const webhookUrl = `${appUrl}/api/webhooks/calendar?tenantId=${encodeURIComponent(tenantId)}`;
+  if (!canRegisterCalendarWatch(appUrl)) {
+    throw new Error(calendarWatchSkipReason(appUrl));
+  }
+
+  const webhookUrl = buildCalendarWebhookUrl(appUrl, tenantId);
+  const channelId = randomUUID();
+  const channelToken = randomUUID();
 
   const tenant = corsair.withTenant(tenantId);
   await tenant.googlecalendar.api.events.getMany({ maxResults: 1 });
   const token = await tenant.googlecalendar.keys.get_access_token();
   if (!token) throw new Error("Calendar access token unavailable");
-  const { expiration } = await registerCalendarWatch(token, webhookUrl, randomUUID());
-  return expiration;
+  const { expiration } = await registerCalendarWatch(
+    token,
+    webhookUrl,
+    channelId,
+    channelToken
+  );
+  return { expiration, channelId, channelToken };
 }
 
 export async function renewWatchesForTenant(
@@ -94,6 +119,7 @@ export async function renewWatchesForTenant(
 
   let gmailExpiresAt: Date | null = null;
   let calendarExpiresAt: Date | null = null;
+  let calendarChannel: { channelId: string; channelToken: string } | undefined;
   let gmailStatus: WatchRenewResult["gmail"] = "skipped";
   let calendarStatus: WatchRenewResult["calendar"] = "skipped";
   const errors: string[] = [];
@@ -109,17 +135,28 @@ export async function renewWatchesForTenant(
   }
 
   if (renewCalendar) {
-    try {
-      calendarExpiresAt = await renewCalendarWatch(tenantId);
-      calendarStatus = "renewed";
-    } catch (error) {
-      calendarStatus = "failed";
-      errors.push(error instanceof Error ? error.message : "Calendar watch failed");
+    const appUrl = getAppUrl();
+    if (!canRegisterCalendarWatch(appUrl)) {
+      calendarStatus = "skipped";
+      console.warn(`[watch] ${tenantId}: ${calendarWatchSkipReason(appUrl)}`);
+    } else {
+      try {
+        const renewed = await renewCalendarWatch(tenantId);
+        calendarExpiresAt = renewed.expiration;
+        calendarChannel = {
+          channelId: renewed.channelId,
+          channelToken: renewed.channelToken,
+        };
+        calendarStatus = "renewed";
+      } catch (error) {
+        calendarStatus = "failed";
+        errors.push(error instanceof Error ? error.message : "Calendar watch failed");
+      }
     }
   }
 
-  if (gmailExpiresAt || calendarExpiresAt) {
-    await saveWatchExpirations(tenantId, gmailExpiresAt, calendarExpiresAt);
+  if (gmailExpiresAt || calendarExpiresAt || calendarChannel) {
+    await saveWatchExpirations(tenantId, gmailExpiresAt, calendarExpiresAt, calendarChannel);
   }
 
   return {

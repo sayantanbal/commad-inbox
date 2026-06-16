@@ -33,6 +33,8 @@ export function useInboxRealtime(
       channel.bind("classification-updated", handler);
       channel.bind("backfill-progress", handler);
       channel.bind("backfill-complete", handler);
+      channel.bind("full-index-progress", handler);
+      channel.bind("full-index-complete", handler);
       channel.bind("reembed-progress", handler);
       channel.bind("reembed-complete", handler);
       channel.bind("calendar-updated", handler);

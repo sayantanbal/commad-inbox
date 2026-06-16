@@ -10,11 +10,25 @@ export type InboxRealtimeEvent =
     }
   | {
       type: "backfill-progress";
+      phase: "quick";
       completed: number;
       total: number;
     }
   | {
       type: "backfill-complete";
+    }
+  | {
+      type: "full-index-progress";
+      completed: number;
+      total: number;
+      remaining: number;
+      batchCompleted: number;
+      batchTotal: number;
+    }
+  | {
+      type: "full-index-complete";
+      total: number;
+      indexed: number;
     }
   | {
       type: "reembed-progress";
@@ -30,6 +44,13 @@ export type InboxRealtimeEvent =
     }
   | {
       type: "calendar-updated";
+      month?: string;
+      events?: Array<
+        Omit<import("@/lib/types").CalendarEvent, "start" | "end"> & {
+          start: string;
+          end: string;
+        }
+      >;
     }
   | {
       type: "inbox-changed";
