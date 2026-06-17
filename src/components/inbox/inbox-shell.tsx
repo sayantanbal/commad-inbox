@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { addDays, addMinutes, differenceInMinutes, format } from "date-fns";
 import { Activity, Command, Keyboard, Menu, Search, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useHotkeys } from "react-hotkeys-hook";
 import { Group, Panel, useDefaultLayout } from "react-resizable-panels";
 import { ActivityBar } from "@/components/inbox/activity-bar";
@@ -75,9 +75,6 @@ import {
   fetchInboxSyncApi,
   fetchMailboxThreadsApi,
   fetchPreBriefApi,
-  fetchPreferencesApi,
-  fetchSendTimeSuggestionApi,
-  fetchSnippetsApi,
   patchCommitmentApi,
   prepareCommitmentFollowUpApi,
   patchPreferencesApi,
@@ -102,7 +99,7 @@ import { useInboxUrlSync } from "@/hooks/use-inbox-url-sync";
 import { recordRecentThread } from "@/lib/inbox/palette-recent";
 import { useAiProvider } from "@/hooks/use-ai-provider";
 import { useIsMobile, usePlatform } from "@/hooks/use-platform";
-import type { MeetingBriefStored, SendTimeSuggestion, SuggestedAction } from "@/lib/schemas/domain";
+import type { MeetingBriefStored, SuggestedAction } from "@/lib/schemas/domain";
 import { mergeClassifications } from "@/lib/inbox/merge-classifications";
 import { schedulingIntentFromAgentInvite, shouldBridgeInviteToInbox } from "@/lib/inbox/agent-scheduling-intent";
 import { deserializeInboxData, deserializeThreads } from "@/lib/inbox-serialize";
@@ -113,7 +110,6 @@ import type { CalendarEvent, Classification, SchedulingIntent, Thread, ThreadMee
 
 const ACTIVE_LANES: TriageLane[] = ["reply", "schedule", "fyi"];
 const LAYOUT_ID = "command-inbox-v3";
-const LAYOUT_STORAGE_KEY = `react-resizable-panels:${LAYOUT_ID}:list:main:sidebar`;
 const DEFAULT_LAYOUT = { list: 22, main: 38, sidebar: 40 };
 
 
@@ -772,7 +768,7 @@ export function InboxShell({
       setActivities((prev) => prev.filter((a) => a.id !== "reembed"));
       scheduleSyncInbox();
     }
-  }, [loadCalendarMonth, scheduleSyncInbox]);
+  }, [loadCalendarMonth, queryClient, scheduleSyncInbox]);
 
   const pollInbox = useCallback(() => {
     scheduleSyncInbox();

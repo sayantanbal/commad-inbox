@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { CalendarClock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -27,15 +27,17 @@ export function CustomSchedulePicker({
   title = "Pick a custom time",
   onSelect,
 }: CustomSchedulePickerProps) {
-  const defaultCustom = useMemo(() => {
+  const [customValue, setCustomValue] = useState("");
+  const [customError, setCustomError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
     const d = new Date(Date.now() + 3_600_000);
     d.setSeconds(0, 0);
     d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0);
-    return toDatetimeLocalValue(d);
+    setCustomValue(toDatetimeLocalValue(d));
+    setCustomError(null);
   }, [open]);
-
-  const [customValue, setCustomValue] = useState(defaultCustom);
-  const [customError, setCustomError] = useState<string | null>(null);
 
   const applyCustom = () => {
     const slot = new Date(customValue);

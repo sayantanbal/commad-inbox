@@ -8,10 +8,7 @@ import { db } from "@/lib/db";
 import { commitments } from "@/lib/db/schema";
 import { getUserPreferences } from "@/lib/focus/window";
 
-export async function processCommitmentFollowUps(
-  userId: string,
-  _userEmail: string
-): Promise<number> {
+export async function processCommitmentFollowUps(userId: string): Promise<number> {
   const prefs = await getUserPreferences(userId);
   const cutoff = addBusinessDays(new Date(), -prefs.followUpDaysDefault);
 

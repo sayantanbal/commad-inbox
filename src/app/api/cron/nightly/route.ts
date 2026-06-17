@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     try {
       const tenant = corsair.withTenant(user.id);
       contactsRebuilt += await rebuildContactsForUser(user.id, tenant);
-      followUpsQueued += await processCommitmentFollowUps(user.id, user.email);
+      followUpsQueued += await processCommitmentFollowUps(user.id);
     } catch (error) {
       console.error("[nightly] failed for user", user.id, error);
     }

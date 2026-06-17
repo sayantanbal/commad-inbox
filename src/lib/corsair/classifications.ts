@@ -5,7 +5,7 @@ import {
 } from "@/lib/classifier/infer-lane";
 import { db } from "@/lib/db";
 import { classifications } from "@/lib/db/schema";
-import type { Classification, Thread, TriageLane } from "@/lib/types";
+import type { Classification, Thread } from "@/lib/types";
 
 export type DefaultClassificationOptions = {
   meetingThreadIds?: ReadonlySet<string>;

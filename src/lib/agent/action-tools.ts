@@ -108,7 +108,7 @@ export function buildAgentActionTools(
       outputSchema: zodSchema(scheduleSendToolOutputSchema),
       metadata: toolMetadata("schedule_send"),
       needsApproval: true,
-      execute: async ({ to, cc, bcc, subject, body, sendAt, threadId, attachmentIds }) => {
+      execute: async ({ to, subject, body, sendAt, threadId, attachmentIds }) => {
         const recipients = normalizeEmails(to);
         const sendDate = new Date(sendAt);
         const queued = await queueSend(userId, {

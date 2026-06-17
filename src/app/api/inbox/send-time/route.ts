@@ -4,7 +4,6 @@ import { requireSessionApi } from "@/lib/api/require-session";
 import { mapGmailThread } from "@/lib/corsair/gmail-parse";
 import { suggestSendTime } from "@/lib/send-time/suggest";
 import { sendTimeSuggestBodySchema } from "@/lib/schemas/api";
-import { getUserPreferences } from "@/lib/focus/window";
 
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
@@ -13,7 +12,6 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, sendTimeSuggestBodySchema);
   if (!parsed.ok) return parsed.response;
 
-  const prefs = await getUserPreferences(auth.userId);
   let messages: Parameters<typeof suggestSendTime>[0] = [];
 
   if (parsed.data.threadId) {
@@ -25,6 +23,6 @@ export async function POST(request: Request) {
     messages = thread?.messages ?? [];
   }
 
-  const suggestion = suggestSendTime(messages, auth.userEmail, prefs.timezone);
+  const suggestion = suggestSendTime(messages, auth.userEmail);
   return NextResponse.json({ suggestion });
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
-import { mapGmailThread } from "@/lib/corsair/gmail-parse";
 import {
   createLinearIssue,
   getLinearConnection,

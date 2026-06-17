@@ -37,7 +37,7 @@ export function AttachmentApprovalPreview({ attachmentIds }: { attachmentIds: st
     return () => {
       cancelled = true;
     };
-  }, [attachmentIds.join(",")]);
+  }, [attachmentIds]);
 
   if (attachmentIds.length === 0) return null;
 
@@ -96,7 +96,7 @@ export function useAttachmentApprovalState(attachmentIds: string[]) {
     return () => {
       cancelled = true;
     };
-  }, [attachmentIds.join(",")]);
+  }, [attachmentIds]);
 
   const totalBytes = items.reduce((sum, item) => sum + item.sizeBytes, 0);
   const blocked = validateTotalAttachmentSize(totalBytes) !== null;

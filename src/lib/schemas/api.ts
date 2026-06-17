@@ -4,7 +4,6 @@ import { draftToneSchema, threadIdField, triageLaneSchema } from "@/lib/schemas/
 import { LIMITS } from "@/lib/schemas/limits";
 import {
   boundedString,
-  emailOrListSchema,
   nonEmptyBoundedString,
   strictObject,
   timeSlotSchema,

@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { Clock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,16 +33,17 @@ export function SendLaterPicker({
   onSchedule,
 }: SendLaterPickerProps) {
   const presets = getSendLaterPresets();
-  const suggestedAt = sendTimeSuggestion
-    ? new Date(sendTimeSuggestion.suggestedAt)
-    : null;
-  const defaultCustom = useMemo(() => {
-    const d = suggestedAt ?? new Date(Date.now() + 3_600_000);
-    d.setSeconds(0, 0);
-    return toDatetimeLocalValue(d);
-  }, [open, suggestedAt]);
-  const [customValue, setCustomValue] = useState(defaultCustom);
+  const suggestedAtIso = sendTimeSuggestion?.suggestedAt ?? null;
+  const [customValue, setCustomValue] = useState("");
   const [customError, setCustomError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const d = suggestedAtIso ? new Date(suggestedAtIso) : new Date(Date.now() + 3_600_000);
+    d.setSeconds(0, 0);
+    setCustomValue(toDatetimeLocalValue(d));
+    setCustomError(null);
+  }, [open, suggestedAtIso]);
 
   const pick = (at: Date) => {
     onSchedule(at);
@@ -73,15 +74,15 @@ export function SendLaterPicker({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 p-4">
-          {sendTimeSuggestion && suggestedAt && (
+          {sendTimeSuggestion && suggestedAtIso && (
             <button
               type="button"
-              onClick={() => pick(suggestedAt)}
+              onClick={() => pick(new Date(suggestedAtIso))}
               className="flex w-full flex-col rounded-[8px] border border-primary/30 bg-[rgba(0,102,204,0.06)] px-3 py-3 text-left"
             >
               <span className="type-caption-strong text-primary">AI suggested</span>
               <span className="type-caption text-ink">
-                {format(suggestedAt, "EEE, MMM d · h:mm a")}
+                {format(new Date(suggestedAtIso), "EEE, MMM d · h:mm a")}
               </span>
               <span className="type-fine text-ink-muted-48">{sendTimeSuggestion.reason}</span>
             </button>

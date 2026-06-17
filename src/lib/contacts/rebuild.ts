@@ -1,7 +1,7 @@
 import "server-only";
 
 import { format, subDays } from "date-fns";
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { generateJsonWithProvider } from "@/lib/ai/generate";
 import { getDefaultProvider } from "@/lib/ai/with-fallback";
 import type { CorsairInstance } from "@/lib/corsair";

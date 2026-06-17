@@ -2,7 +2,7 @@
 
 import { addMinutes, format } from "date-fns";
 import { AlertCircle, Calendar, Clock, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   findNearestFreeSlot,
@@ -74,11 +74,14 @@ export function InlineAvailabilityPicker({
     }
   }, [open, slotOptions.length]);
 
-  const slotIsBusy = (slot: Date, end: Date) =>
-    isSlotBusy(calendarEvents, slot, end, excludeEventId) ||
-    isSlotBusyForAttendees(attendeeBusy, slot, end);
+  const slotIsBusy = useCallback(
+    (slot: Date, end: Date) =>
+      isSlotBusy(calendarEvents, slot, end, excludeEventId) ||
+      isSlotBusyForAttendees(attendeeBusy, slot, end),
+    [attendeeBusy, calendarEvents, excludeEventId]
+  );
 
-  const handleSlotSelect = (slot: Date) => {
+  const handleSlotSelect = useCallback((slot: Date) => {
     const end = addMinutes(slot, duration);
     if (slotIsBusy(slot, end)) {
       const alternative = findNearestFreeSlot(calendarEvents, duration, slot, {
@@ -102,7 +105,7 @@ export function InlineAvailabilityPicker({
     }
     setConflictHint(null);
     onSelectSlot(slot);
-  };
+  }, [calendarEvents, duration, excludeEventId, onSelectSlot, slotIsBusy, slotOptions]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,7 +138,7 @@ export function InlineAvailabilityPicker({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [highlightIndex, onClose, open, slotOptions]);
+  }, [handleSlotSelect, highlightIndex, onClose, open, slotOptions]);
 
   if (!open) return null;
 

@@ -40,11 +40,7 @@ export function computeReplyHistogram(messages: Message[], userEmail: string): M
   return histogram;
 }
 
-export function suggestSendTime(
-  messages: Message[],
-  userEmail: string,
-  timezone = "UTC"
-): SendTimeSuggestion {
+export function suggestSendTime(messages: Message[], userEmail: string): SendTimeSuggestion {
   const exchanges = messages.filter(
     (m) => m.from.email.toLowerCase() !== userEmail.toLowerCase()
   ).length;
