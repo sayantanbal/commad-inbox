@@ -19,5 +19,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "scripts", "apps"]
+  "exclude": ["node_modules", "scripts", "apps", "src/lib/__tests__"]
 }

@@ -1,4 +1,12 @@
 {
   "title": "Overview",
-  "pages": ["introduction", "features", "architecture", "stack", "data-model"]
+  "pages": [
+    "introduction",
+    "evaluator-guide",
+    "judge-access",
+    "features",
+    "architecture",
+    "stack",
+    "data-model"
+  ]
 }

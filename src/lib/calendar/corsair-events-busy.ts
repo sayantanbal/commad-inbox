@@ -2,11 +2,9 @@ import "server-only";
 
 import type { CorsairInstance } from "@/lib/corsair";
 import { fetchEventsInRange } from "@/lib/corsair/events";
+import { eventsToBusyWindows, type BusyWindow } from "@/lib/calendar/free-slots";
 
-export interface BusyWindow {
-  start: string;
-  end: string;
-}
+export type { BusyWindow };
 
 /**
  * Derive busy windows from Corsair Calendar events (primary calendar).
@@ -40,17 +38,6 @@ export async function fetchBusyFromCorsairEvents(
     return result;
   }
 
-  const busy: BusyWindow[] = [];
-  for (const event of events) {
-    if (event.end <= rangeStart || event.start >= rangeEnd) {
-      continue;
-    }
-    busy.push({
-      start: event.start.toISOString(),
-      end: event.end.toISOString(),
-    });
-  }
-
-  result[userLower] = busy;
+  result[userLower] = eventsToBusyWindows(events, rangeStart, rangeEnd);
   return result;
 }

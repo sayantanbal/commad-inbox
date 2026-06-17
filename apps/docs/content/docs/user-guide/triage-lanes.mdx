@@ -33,9 +33,14 @@ This data powers the **`M`** meeting workflow — you do not need to re-read the
 
 ## How classification updates
 
-### Initial backfill
+### Initial indexing
 
-When you first connect Google, the app classifies the latest 50 INBOX threads. Progress appears in the activity banner.
+When you first connect Google, the app runs a **two-phase index**:
+
+1. **Immediate** — classifies the latest ~50 INBOX threads so lanes are usable quickly
+2. **Background** — indexes your full INBOX for semantic search (progress banner)
+
+Advanced search (`Mod+Shift+F`) queries Gmail via Corsair anytime — no index required.
 
 ### Realtime webhooks
 

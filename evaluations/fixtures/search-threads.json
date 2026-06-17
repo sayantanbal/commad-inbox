@@ -1,0 +1,25 @@
+{
+  "threads": [
+    {
+      "threadId": "thread-schedule-001",
+      "subject": "Coffee next week?",
+      "sender": "alice@acme.com",
+      "lane": "schedule",
+      "snippet": "Does Tuesday at 2pm work for you?"
+    },
+    {
+      "threadId": "thread-reply-002",
+      "subject": "Re: Proposal feedback",
+      "sender": "bob@startup.io",
+      "lane": "reply",
+      "snippet": "Can you send the updated deck?"
+    },
+    {
+      "threadId": "thread-fyi-003",
+      "subject": "Newsletter: SaaS weekly",
+      "sender": "news@saasweekly.com",
+      "lane": "fyi",
+      "snippet": "Top stories this week"
+    }
+  ]
+}

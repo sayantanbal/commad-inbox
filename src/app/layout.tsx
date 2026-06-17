@@ -16,6 +16,18 @@ export const metadata: Metadata = {
   title: "Command Inbox",
   description: "Keyboard-first email and calendar command center",
   applicationName: "Command Inbox",
+  openGraph: {
+    title: "Command Inbox",
+    description: "Keyboard-first Gmail + Calendar command center with AI triage and Corsair MCP",
+    type: "website",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Command Inbox" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Command Inbox",
+    description: "Keyboard-first Gmail + Calendar command center with AI triage and Corsair MCP",
+    images: ["/opengraph-image"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -30,7 +42,7 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover" as const,
-  themeColor: "#09090b",
+  themeColor: "#f5f5f7",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

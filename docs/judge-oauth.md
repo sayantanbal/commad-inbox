@@ -2,6 +2,16 @@
 
 Command Inbox uses a Google Cloud OAuth app in **Testing** mode. Only emails listed as **Test users** can sign in until the app is published.
 
+## Request access (judges)
+
+We do **not** publish shared demo passwords. To evaluate with your own Gmail:
+
+1. Open a [GitHub issue](https://github.com/sayantanbal/commad-inbox/issues/new?labels=judge-access&title=Judge%20OAuth%20access%20request) with your **Gmail address** (the account you will sign in with).
+2. Wait for confirmation your email was added to OAuth **Test users**.
+3. Follow the [Evaluator guide](https://docs.command-inbox.sayantanbal.in/docs/overview/evaluator-guide).
+
+Until your email is on the list, Google shows **Access blocked** — expected.
+
 ## Before the demo
 
 1. Open [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **OAuth consent screen**.

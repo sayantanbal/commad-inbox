@@ -271,6 +271,7 @@ export const commitments = pgTable(
     confidence: real("confidence").notNull(),
     extractedAt: timestamp("extracted_at", { withTimezone: true }).defaultNow().notNull(),
     followUpDraftQueuedAt: timestamp("follow_up_draft_queued_at", { withTimezone: true }),
+    followUpDraftHtml: text("follow_up_draft_html"),
   },
   (table) => [
     index("commitments_user_status_idx").on(table.userId, table.status),

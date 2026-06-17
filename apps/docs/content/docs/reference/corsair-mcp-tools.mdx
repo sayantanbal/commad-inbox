@@ -3,85 +3,66 @@ title: Corsair MCP tools
 description: Agent tool definitions, approval flow, and execution model
 ---
 
-Source: `src/lib/agent/mcp-tools.ts`, `@corsair-dev/mcp`.
+Source: `src/lib/agent/mcp-tools.ts`, `src/lib/agent/action-tools.ts`, `@corsair-dev/mcp`.
 
-The agent embeds Corsair MCP tools **in-process** — no standalone MCP HTTP server.
+The agent embeds Corsair MCP tools **in-process** — no standalone MCP HTTP server required for in-app chat. A separate stdio MCP server (`mcp-server.ts`) is available for Cursor.
 
 ## buildAgentMcpTools
 
 ```typescript
 function buildAgentMcpTools(
   tenant: ReturnType<CorsairInstance["withTenant"]>,
-  userId: string
+  userId: string,
+  userEmail: string
 ): ToolSet
 ```
 
 Called per request in `POST /api/agent/chat` with the authenticated user's Corsair tenant.
 
-## Tool definitions
+## Tool layers
 
-Built via `buildCorsairToolDefs()` from `@corsair-dev/mcp`:
+### 1. Typed workflow tools (writes + inbox reads)
 
-```typescript
-buildCorsairToolDefs({
-  corsair: tenant,
-  tenantId: userId,
-  setup: false,
-});
-```
+Defined in `src/lib/agent/action-tools.ts`. Write tools use `needsApproval: true` and rich preview cards in `agent-tool-approval.tsx`.
 
-### list_operations
+| Tool | Approval | Purpose |
+|------|----------|---------|
+| `send_email` | Yes | Send mail with optional attachments |
+| `schedule_send` | Yes | Queue mail for later |
+| `create_calendar_invite` | Yes | Event + Google Meet |
+| `reschedule_calendar_event` | Yes | Move event by id |
+| `cancel_calendar_event` | Yes | Delete event by id |
+| `stage_thread_attachment` | No | Stage inbound attachment for send |
+| `search_threads` | No | Gmail query + optional lane filter |
+| `list_calendar_events` | No | Events in date range |
 
-Discover available Gmail and Google Calendar operations exposed by Corsair.
+### 2. Corsair discovery tools (read-only)
 
-- **Approval:** Not required
-- **Purpose:** Agent planning — find the right operation before calling `run_script`
+From `buildCorsairToolDefs()` with an explicit allowlist (`corsair-tool-allowlist.ts`):
 
-### get_schema
+| Tool | Purpose |
+|------|---------|
+| `list_operations` | Discover Gmail/Calendar API paths |
+| `get_schema` | Inspect schema for a path from `list_operations` |
 
-Inspect input schema for a specific operation.
-
-- **Approval:** Not required
-- **Purpose:** Agent validates parameters before execution
-
-### run_script
-
-Execute a Corsair script against Gmail or Calendar.
-
-- **Approval:** **Required** (`needsApproval: true`)
-- **Purpose:** Write operations — send mail, create events, modify labels, etc.
-
-## Approval configuration
-
-```typescript
-const APPROVAL_TOOLS = new Set(["run_script"]);
-```
-
-In tool registration:
-
-```typescript
-needsApproval: APPROVAL_TOOLS.has(def.name),
-```
-
-The UI (`agent-tool-approval.tsx`) renders approval cards when the stream pauses on `run_script`.
+**Not exposed:** `run_script`, `corsair_setup` — writes use typed tools above.
 
 ## Execution flow
 
 1. User sends message → `POST /api/agent/chat`
-2. `streamText()` with MCP tools attached
-3. Agent may call `list_operations` / `get_schema` freely
-4. On `run_script` → stream pauses, approval UI shown
-5. User approves → `execute()` runs `def.handler(input)`
-6. Result converted to text via `toolResultToOutput()`
-7. Stream continues with tool result
+2. `createInboxAgentStream()` runs `streamText` with merged tools
+3. Agent may call discovery tools and read-only workflow tools freely
+4. On `send_email`, `create_calendar_invite`, etc. → stream pauses for approval
+5. User approves → `execute()` runs against Corsair tenant
+6. Stream continues with tool result
 
 ## Error handling
 
-If Corsair returns `isError: true`, `toolResultToOutput` throws with the text content — surfaced in the agent stream via `agentStreamErrorHandler`.
+If Corsair returns `isError: true`, `toolResultToOutput` throws with the text content — surfaced via `agentStreamErrorHandler`.
 
 ## System prompt
 
-Agent behavior guided by `src/lib/agent/system-prompt.ts` — instructs tool use, approval respect, and scheduling-focused workflows.
+`src/lib/agent/system-prompt.ts` instructs the model to prefer typed tools for writes and `search_threads` / `list_calendar_events` for reads.
 
 ## Security model
 
@@ -89,24 +70,23 @@ Agent behavior guided by `src/lib/agent/system-prompt.ts` — instructs tool use
 |----------|-------|
 | Tenant isolation | Tools scoped to `userId` tenant only |
 | Credentials | User's OAuth tokens via Corsair |
-| Approval gate | Write scripts require explicit user consent |
+| Approval gate | Typed write tools require explicit user consent |
 | Timeout | 60s max duration on chat route |
 
 ## Example agent prompt
 
 ```
 Send a calendar invite to friend@corsair.dev at 9 AM next Thursday
-and draft a confirmation reply.
+and email him saying I look forward to it.
 ```
 
 Expected tool sequence:
 
-1. `list_operations` — find calendar + gmail ops
-2. `get_schema` — inspect create event + send draft schemas
-3. `run_script` — create event (approval)
-4. `run_script` — queue/send draft (approval)
+1. `create_calendar_invite` (approval)
+2. `send_email` (approval)
 
 ## Related
 
 - [Agent chat user guide](/docs/user-guide/agent-chat)
 - [API routes — /api/agent/chat](/docs/reference/api-routes)
+- [MCP server (Cursor)](../../mcp-server.md) — repo `docs/mcp-server.md`

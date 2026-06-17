@@ -1,0 +1,21 @@
+{
+  "corsairDiscovery": {
+    "allowedTools": ["list_operations", "get_schema"],
+    "blockedTools": ["run_script", "setup"]
+  },
+  "typedWriteTools": [
+    "send_email",
+    "schedule_send",
+    "create_calendar_invite",
+    "reschedule_calendar_event",
+    "cancel_calendar_event",
+    "cancel_meeting_with_notice",
+    "draft_commitment_follow_up"
+  ],
+  "readTools": [
+    "list_calendar_events",
+    "search_threads",
+    "get_thread_summary",
+    "stage_thread_attachment"
+  ]
+}

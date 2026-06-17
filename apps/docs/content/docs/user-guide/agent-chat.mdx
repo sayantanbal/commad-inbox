@@ -1,23 +1,35 @@
 ---
 title: Agent chat
-description: Corsair MCP agent with tool approval for run_script
+description: Corsair MCP agent with typed tools and human-in-the-loop approval
 ---
 
-The **agent chat panel** lets you perform multi-step Gmail and Calendar operations in natural language. It uses Corsair MCP tools embedded in the Next.js server — no separate MCP server required.
+The **agent chat panel** lets you perform multi-step Gmail and Calendar operations in natural language. Corsair MCP discovery tools and typed workflow tools run in the Next.js server — no separate MCP server required for in-app chat.
 
 Toggle the panel from the inbox header.
 
 ## What the agent can do
 
-Through Corsair MCP tools:
+### Discovery (read-only)
+
+| Tool | Purpose |
+|------|---------|
+| `list_operations` | Discover available Gmail/Calendar operations |
+| `get_schema` | Inspect operation input schemas |
+
+### Typed workflow tools
 
 | Tool | Purpose | Approval required |
 |------|---------|-------------------|
-| `list_operations` | Discover available Gmail/Calendar operations | No |
-| `get_schema` | Inspect operation input schemas | No |
-| `run_script` | Execute Corsair scripts (send mail, create events, etc.) | **Yes** |
+| `send_email` | Send mail with optional attachments | **Yes** |
+| `schedule_send` | Queue mail for later | **Yes** |
+| `create_calendar_invite` | Create event with Google Meet link | **Yes** |
+| `reschedule_calendar_event` | Move an existing event | **Yes** |
+| `cancel_calendar_event` | Cancel an event | **Yes** |
+| `stage_thread_attachment` | Stage a thread attachment for a later send | No |
+| `search_threads` | Search Gmail by query and optional lane | No |
+| `list_calendar_events` | List events in a date range | No |
 
-Destructive or write operations go through **`run_script`**, which pauses for your explicit approval before executing.
+Write operations use **typed tools** with rich approval cards — not raw `run_script`. The agent may also call curated Corsair discovery operations for reads.
 
 ## Example prompts
 
@@ -25,9 +37,9 @@ Destructive or write operations go through **`run_script`**, which pauses for yo
 
 > Send a calendar invite to friend@corsair.dev at 9 AM next Thursday and draft a confirmation reply.
 
-**Search and summarize:**
+**Search threads:**
 
-> Find my last three emails from alice@company.com and summarize what they need from me.
+> Find threads from alice@company.com in the schedule lane.
 
 **Calendar check:**
 
@@ -35,18 +47,18 @@ Destructive or write operations go through **`run_script`**, which pauses for yo
 
 ## Approval flow
 
-When the agent calls `run_script`:
+When the agent calls a tool with `needsApproval` (e.g. `send_email`, `create_calendar_invite`):
 
-1. Stream pauses with an **approval card** showing the script and parameters
+1. Stream pauses with an **approval card** showing recipients, subject, time, or Meet link
 2. You **Approve** or **Deny**
-3. On approve, the script runs against your Corsair tenant
+3. On approve, the action runs against your Corsair tenant
 4. Results stream back into the chat
 
-Never approve scripts you do not understand — they run with your Google OAuth credentials.
+Never approve actions you do not understand — they run with your Google OAuth credentials.
 
 ## Provider selection
 
-The agent uses the same **AI provider switcher** as drafts and classification (OpenAI default, Gemini fallback). Provider is sent with each chat request.
+The agent uses the same **AI provider switcher** as drafts and classification (OpenAI or Gemini). Provider is sent with each chat request.
 
 ## Streaming
 

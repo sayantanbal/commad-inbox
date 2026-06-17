@@ -39,6 +39,18 @@ export const mockSendTime = {
   reason: "Priya usually replies Tue 10am — send the evening before.",
 };
 
+export const mockScheduleSlots = [
+  { time: "Tue 10:00 AM", busy: false },
+  { time: "Tue 11:00 AM", busy: true },
+  { time: "Tue 2:30 PM", busy: false },
+] as const;
+
+export const mockScheduleThread = {
+  subject: "Coffee next week?",
+  sender: "Priya Nair",
+  attendees: ["priya@acme.io"],
+};
+
 export const mockWorkingDaysText =
   "I work Mon–Thu 9:00–18:00 and Fri 9:00–13:00 (Asia/Kolkata). No meetings before 10:00. Lunch 13:00–14:00 blocked daily.";
 
@@ -56,6 +68,11 @@ export const featureTabCopy: Record<
   string,
   { label: string; description: string; key?: string }
 > = {
+  schedule: {
+    label: "Schedule",
+    description: "Press M on a scheduling thread — pick a slot, send invite + confirmation draft.",
+    key: "M",
+  },
   commitments: {
     label: "Commitments",
     description: "Tracks what you promised and what you're waiting on — across every thread.",

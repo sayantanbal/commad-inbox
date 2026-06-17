@@ -65,6 +65,22 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+function assertPooledDatabaseUrl(url: string, nodeEnv: string): void {
+  const isPooled = url.includes("-pooler.") || url.includes("pooler");
+  if (isPooled) return;
+
+  const message =
+    "DATABASE_URL should use Neon's pooled endpoint (-pooler in hostname) for serverless. Use a direct URL only for migrations.";
+
+  if (nodeEnv === "production" && process.env.VERCEL) {
+    throw new Error(message);
+  }
+
+  if (nodeEnv !== "test") {
+    console.warn(`[env] ${message}`);
+  }
+}
+
 function loadEnv(): Env {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -73,6 +89,9 @@ function loadEnv(): Env {
       .join("\n");
     throw new Error(`Invalid environment variables:\n${formatted}`);
   }
+
+  assertPooledDatabaseUrl(parsed.data.DATABASE_URL, parsed.data.NODE_ENV);
+
   return parsed.data;
 }
 

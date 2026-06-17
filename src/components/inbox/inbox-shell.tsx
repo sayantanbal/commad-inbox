@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addDays, addMinutes, differenceInMinutes, format } from "date-fns";
-import { Activity, Command, Keyboard, Search, Settings } from "lucide-react";
+import { Activity, Command, Keyboard, Menu, Search, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -26,6 +26,7 @@ import { CommandPalette } from "@/components/inbox/command-palette";
 import { ComposerPanel } from "@/components/inbox/composer-panel";
 import { ShortcutCheatsheet } from "@/components/inbox/shortcut-cheatsheet";
 import { MobileCommandFab, MobileTabBar, type MobileTab } from "@/components/inbox/mobile-tab-bar";
+import { MobileNavDrawer } from "@/components/inbox/mobile-nav-drawer";
 import { ScheduleOverlapModal } from "@/components/inbox/schedule-overlap-modal";
 import { RescheduleExistingMeetingModal } from "@/components/inbox/reschedule-existing-meeting-modal";
 import { SendLaterPicker } from "@/components/inbox/send-later-picker";
@@ -52,6 +53,7 @@ import {
   archiveThreadApi,
   cancelMeetingApi,
   cancelSendApi,
+  fetchMeetingCancelDraftApi,
   createFocusBlockApi,
   createMeetingApi,
   addContactApi,
@@ -77,6 +79,7 @@ import {
   fetchSendTimeSuggestionApi,
   fetchSnippetsApi,
   patchCommitmentApi,
+  prepareCommitmentFollowUpApi,
   patchPreferencesApi,
   rescheduleCalendarEventApi,
   type CommitmentItem,
@@ -95,6 +98,8 @@ import {
 } from "@/hooks/use-inbox-queries";
 import { inboxQueryKeys } from "@/lib/inbox/query-keys";
 import { useInboxShortcuts } from "@/hooks/use-inbox-shortcuts";
+import { useInboxUrlSync } from "@/hooks/use-inbox-url-sync";
+import { recordRecentThread } from "@/lib/inbox/palette-recent";
 import { useAiProvider } from "@/hooks/use-ai-provider";
 import { useIsMobile, usePlatform } from "@/hooks/use-platform";
 import type { MeetingBriefStored, SendTimeSuggestion, SuggestedAction } from "@/lib/schemas/domain";
@@ -209,6 +214,7 @@ export function InboxShell({
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerDraft, setComposerDraft] = useState("");
   const [draftLoading, setDraftLoading] = useState(false);
+  const pendingMeetingCancelRef = useRef<string | null>(null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [availabilityMode, setAvailabilityMode] = useState<"create" | "reschedule">("create");
   const [sendLaterOpen, setSendLaterOpen] = useState(false);
@@ -230,7 +236,9 @@ export function InboxShell({
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("agent");
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
-  const [workspacePanel, setWorkspacePanel] = useState<WorkspacePanel>("welcome");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mainPanelRef = useRef<HTMLElement>(null);
+  const [workspacePanel, setWorkspacePanel] = useState<WorkspacePanel>("inbox");
   const [mailboxView, setMailboxView] = useState<MailboxView>("inbox");
   const [sentThreads, setSentThreads] = useState<Thread[]>([]);
   const [mailboxLoading, setMailboxLoading] = useState(false);
@@ -253,6 +261,19 @@ export function InboxShell({
       setSettingsOpen(true);
     }
   }, [initialOpenSettings]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("workspacePanel");
+    if (saved === "inbox" || saved === "calendar" || saved === "brief") {
+      setWorkspacePanel(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (workspacePanel !== "welcome") {
+      localStorage.setItem("workspacePanel", workspacePanel);
+    }
+  }, [workspacePanel]);
 
   const prefs = prefsData ?? {
     batchWindows: ["09:00", "13:00", "17:00"],
@@ -798,6 +819,28 @@ export function InboxShell({
     [loadCommitments]
   );
 
+  const handleReviewFollowUp = useCallback(
+    (commitmentId: string) => {
+      setDraftLoading(true);
+      void prepareCommitmentFollowUpApi(commitmentId)
+        .then((result) => {
+          setCommitmentsOpen(false);
+          handleMailboxView("inbox");
+          setSelectedThreadId(result.threadId);
+          setComposerDraft(result.draftHtml);
+          setComposerOpen(true);
+        })
+        .catch((error) => {
+          showUndo(
+            error instanceof Error ? error.message : "Could not prepare follow-up",
+            () => undefined
+          );
+        })
+        .finally(() => setDraftLoading(false));
+    },
+    [handleMailboxView, showUndo]
+  );
+
   const openWaitingFor = useCallback(() => {
     openCommitments("waiting");
   }, [openCommitments]);
@@ -940,26 +983,24 @@ export function InboxShell({
   const handleCancelMeeting = useCallback(async () => {
     if (!selectedThreadId || !selectedLinkedMeeting) return;
 
-    const snapshot = selectedLinkedMeeting;
-    const snapshotEvent = selectedLinkedEvent;
-
-    setThreadMeetings((prev) => prev.filter((meeting) => meeting.threadId !== selectedThreadId));
-    setCalendarEvents((prev) => prev.filter((event) => event.id !== snapshot.eventId));
-
+    setDraftLoading(true);
     try {
-      await cancelMeetingApi(selectedThreadId);
-      showUndo("Meeting cancelled — attendees notified", () => undefined);
+      const { draftHtml } = await fetchMeetingCancelDraftApi(selectedThreadId);
+      pendingMeetingCancelRef.current = selectedThreadId;
+      setComposerDraft(draftHtml);
+      setComposerOpen(true);
+      showUndo("Review cancellation email — calendar cancels when you send", () => {
+        pendingMeetingCancelRef.current = null;
+      });
     } catch (error) {
-      setThreadMeetings((prev) => [...prev, snapshot]);
-      if (snapshotEvent) {
-        setCalendarEvents((prev) => [...prev, snapshotEvent]);
-      }
       showUndo(
-        error instanceof Error ? error.message : "Could not cancel meeting",
+        error instanceof Error ? error.message : "Could not prepare cancellation",
         () => undefined
       );
+    } finally {
+      setDraftLoading(false);
     }
-  }, [selectedLinkedEvent, selectedLinkedMeeting, selectedThreadId, showUndo]);
+  }, [selectedLinkedMeeting, selectedThreadId, showUndo]);
 
   const openAgentMeetingPicker = useCallback(
     (input: Record<string, unknown>) => {
@@ -1002,8 +1043,21 @@ export function InboxShell({
     setAvailabilityOpen(true);
   }, [selectedThreadId, threadMeetingsMap, classificationMap]);
 
+  const selectThread = useCallback(
+    (threadId: string) => {
+      const thread =
+        liveThreads.find((item) => item.id === threadId) ??
+        sentThreads.find((item) => item.id === threadId) ??
+        initialThreads.find((item) => item.id === threadId);
+      if (thread) recordRecentThread(thread);
+      setSelectedThreadId(threadId);
+      if (isMobile) setMobileThreadOpen(true);
+    },
+    [isMobile, liveThreads, sentThreads, initialThreads]
+  );
+
   const handleAction = useCallback(
-    (action: string) => {
+    (action: string, payload?: string) => {
       switch (action) {
         case "nextThread":
           navigateThread(1);
@@ -1061,6 +1115,65 @@ export function InboxShell({
           }
           break;
         }
+        case "navInbox":
+          setCommitmentsOpen(false);
+          setWorkspacePanel("inbox");
+          setMailboxView("inbox");
+          setMobileTab("inbox");
+          break;
+        case "navSnoozed":
+          setCommitmentsOpen(false);
+          setWorkspacePanel("inbox");
+          setMailboxView("snoozed");
+          setMobileTab("inbox");
+          setMobileThreadOpen(false);
+          break;
+        case "navCalendar":
+          setCommitmentsOpen(false);
+          setWorkspacePanel("calendar");
+          setMobileTab("calendar");
+          break;
+        case "navCommitments":
+          openCommitments("commitments");
+          break;
+        case "navWaiting":
+          openCommitments("waiting");
+          break;
+        case "navBrief":
+          setCommitmentsOpen(false);
+          setWorkspacePanel("brief");
+          setMobileTab("brief");
+          break;
+        case "navSent":
+          setCommitmentsOpen(false);
+          setWorkspacePanel("inbox");
+          setMailboxView("sent");
+          setMobileTab("inbox");
+          setMobileThreadOpen(false);
+          break;
+        case "navArchive":
+          setCommitmentsOpen(false);
+          setWorkspacePanel("inbox");
+          setMailboxView("archive");
+          setMobileTab("inbox");
+          setMobileThreadOpen(false);
+          break;
+        case "navSettings":
+          void refreshAiKeysStatus();
+          setSettingsOpen(true);
+          break;
+        case "navPeople":
+          router.push("/people");
+          break;
+        case "openThread":
+          if (payload) {
+            setCommitmentsOpen(false);
+            setWorkspacePanel("inbox");
+            setMailboxView("inbox");
+            setMobileTab("inbox");
+            selectThread(payload);
+          }
+          break;
         default:
           break;
       }
@@ -1075,6 +1188,10 @@ export function InboxShell({
       openScheduleMeeting,
       openSnooze,
       openWaitingFor,
+      openCommitments,
+      refreshAiKeysStatus,
+      router,
+      selectThread,
       selectedThreadId,
       showUndo,
       threadCommitments,
@@ -1104,8 +1221,54 @@ export function InboxShell({
     ]
   );
 
+  const urlSyncState = useMemo(
+    () => ({
+      selectedThreadId,
+      mailboxView,
+      activeLane,
+      workspacePanel,
+      commitmentsOpen,
+      commitmentsView,
+    }),
+    [
+      activeLane,
+      commitmentsOpen,
+      commitmentsView,
+      mailboxView,
+      selectedThreadId,
+      workspacePanel,
+    ]
+  );
+
+  const urlSyncHandlers = useMemo(
+    () => ({
+      setSelectedThreadId,
+      setMailboxView,
+      setActiveLane,
+      setWorkspacePanel,
+      setCommitmentsOpen,
+      setCommitmentsView,
+      setMobileTab,
+      setMobileThreadOpen,
+    }),
+    []
+  );
+
+  useInboxUrlSync(urlSyncState, urlSyncHandlers, liveThreads);
+
+  useEffect(() => {
+    mainPanelRef.current?.focus({ preventScroll: true });
+  }, [
+    activeLane,
+    commitmentsOpen,
+    mailboxView,
+    selectedThreadId,
+    workspacePanel,
+  ]);
+
   useInboxShortcuts(shortcutState, isMac, handleAction);
   const closeComposer = useCallback(() => {
+    pendingMeetingCancelRef.current = null;
     setComposerOpen(false);
     setComposerDraft("");
   }, []);
@@ -1434,11 +1597,33 @@ export function InboxShell({
           setComposerOpen(true);
         });
         promptUnknownContacts(to);
+
+        const pendingCancelThreadId = pendingMeetingCancelRef.current;
+        if (pendingCancelThreadId === selectedThread.id) {
+          pendingMeetingCancelRef.current = null;
+          const snapshot = threadMeetingsMap.get(pendingCancelThreadId);
+          const snapshotEvent = calendarEvents.find((event) => event.id === snapshot?.eventId);
+          setThreadMeetings((prev) =>
+            prev.filter((meeting) => meeting.threadId !== pendingCancelThreadId)
+          );
+          if (snapshot?.eventId) {
+            setCalendarEvents((prev) => prev.filter((event) => event.id !== snapshot.eventId));
+          }
+          void cancelMeetingApi(pendingCancelThreadId).catch(() => {
+            if (snapshot) {
+              setThreadMeetings((prev) => [...prev, snapshot]);
+            }
+            if (snapshotEvent) {
+              setCalendarEvents((prev) => [...prev, snapshotEvent]);
+            }
+            showUndo("Email queued but calendar cancel failed", () => undefined);
+          });
+        }
       } catch (error) {
         showUndo(error instanceof Error ? error.message : "Send failed", () => undefined);
       }
     },
-    [selectedThread, userEmail, showUndo, promptUnknownContacts]
+    [selectedThread, userEmail, showUndo, promptUnknownContacts, threadMeetingsMap, calendarEvents]
   );
 
   const laneCounts = useMemo(() => {
@@ -1489,14 +1674,6 @@ export function InboxShell({
       }
     },
     [selectedThread, userEmail, addActivity, showUndo]
-  );
-
-  const selectThread = useCallback(
-    (threadId: string) => {
-      setSelectedThreadId(threadId);
-      if (isMobile) setMobileThreadOpen(true);
-    },
-    [isMobile]
   );
 
   const quickSnoozeThread = useCallback((threadId: string) => {
@@ -1782,12 +1959,17 @@ export function InboxShell({
         onDismiss={(id) => {
           void patchCommitmentApi(id, "dismissed").then(() => loadCommitments(commitmentsView));
         }}
+        onReviewFollowUp={(id) => handleReviewFollowUp(id)}
       />
     </aside>
   );
 
   const renderThreadPanel = (onBack?: () => void) => (
-    <main className="flex h-full min-w-0 flex-col overflow-hidden">
+    <main
+      ref={mainPanelRef}
+      tabIndex={-1}
+      className="flex h-full min-w-0 flex-col overflow-hidden outline-none"
+    >
       {onBack && (
         <div className="flex shrink-0 items-center border-b border-border px-2 py-1.5">
           <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onBack}>
@@ -1858,6 +2040,7 @@ export function InboxShell({
           }}
           aiProvider={provider}
           onSuggestedAction={handleSuggestedAction}
+          stickyMobileActions={!!onBack}
         />
       </div>
       <ComposerPanel
@@ -1899,6 +2082,14 @@ export function InboxShell({
           className="flex h-11 shrink-0 items-center justify-between border-b border-hairline px-4 supports-[backdrop-filter]:bg-[color:var(--color-canvas-parchment)]/90 backdrop-blur-[20px] backdrop-saturate-[1.8] bg-parchment"
         >
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="btn-icon-circular btn-icon-circular--sm lg:hidden"
+              aria-label="Open navigation menu"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="h-4 w-4" strokeWidth={1.75} />
+            </button>
             <Link
               href="/"
               className="type-body-strong text-ink hover:opacity-80 transition-opacity"
@@ -2195,6 +2386,7 @@ export function InboxShell({
           open={paletteOpen}
           onOpenChange={setPaletteOpen}
           isMac={isMac}
+          threads={liveThreads}
           onAction={handleAction}
         />
         <ShortcutCheatsheet open={cheatsheetOpen} onOpenChange={setCheatsheetOpen} isMac={isMac} />
@@ -2380,6 +2572,35 @@ export function InboxShell({
             </div>
           </div>
         )}
+        <MobileNavDrawer
+          open={mobileNavOpen}
+          onClose={() => setMobileNavOpen(false)}
+          mailboxView={mailboxView}
+          commitmentsOpen={commitmentsOpen}
+          commitmentsView={commitmentsView}
+          onMailboxView={(view) => {
+            setCommitmentsOpen(false);
+            setWorkspacePanel("inbox");
+            setMailboxView(view);
+            setMobileTab("inbox");
+            setMobileThreadOpen(false);
+          }}
+          onOpenCommitments={(view) => {
+            openCommitments(view);
+            setMobileTab("inbox");
+            setMobileThreadOpen(false);
+          }}
+          onOpenBrief={() => {
+            setCommitmentsOpen(false);
+            setWorkspacePanel("brief");
+            setMobileTab("brief");
+            setMobileThreadOpen(false);
+          }}
+          onOpenSettings={() => {
+            void refreshAiKeysStatus();
+            setSettingsOpen(true);
+          }}
+        />
         <MobileTabBar
           active={mobileTab}
           onChange={(tab) => {

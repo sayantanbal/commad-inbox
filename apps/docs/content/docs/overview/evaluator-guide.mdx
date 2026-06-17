@@ -1,0 +1,82 @@
+---
+title: Evaluator guide
+description: Five-minute walkthrough for hackathon judges and reviewers
+---
+
+## Before you sign in
+
+1. **Request OAuth access** — add your Gmail to the Google OAuth **Test users** list. See [Judge access](/docs/overview/judge-access#request-oauth-access-judges) (open a GitHub issue with your Gmail; no shared passwords).
+2. Use a desktop browser first (Chrome or Edge). Mobile works — open the **menu** (☰) for Sent, Snoozed, and Archive.
+3. Prefer a **fully indexed** inbox for semantic search (`/`) — fresh accounts still get the last 50 threads classified immediately.
+
+## 5-minute demo script
+
+### 1. Triage loop (60s)
+
+- Open **Inbox** → note **Reply / Schedule / FYI** lane tabs.
+- Press **`j`** / **`k`** to move between threads.
+- Press **`e`** to archive — watch the **undo toast** (5 seconds).
+- Press **`/`** for semantic search over indexed mail.
+
+### 2. Hero workflow — schedule a meeting (90s)
+
+This is the headline feature:
+
+1. Switch to the **Schedule** lane (or pick a scheduling thread).
+2. Press **`M`** — inline availability appears beside the thread.
+3. Pick a slot (busy attendee slots are grayed when Calendar free/busy is available).
+4. Review the confirmation draft in the composer → send.
+
+### 3. Command palette & deep links (45s)
+
+- Press **`⌘K`** (or tap the floating command button on mobile).
+- Type **sent**, **snooze**, or a **sender name** to jump.
+- Open a shareable URL: `/inbox?thread=THREAD_ID&lane=schedule` — the thread opens directly.
+
+### 4. Agent with approvals (60s)
+
+- Open the **Agent** tab (mobile) or right panel (desktop).
+- Ask: *"Summarize this thread"* or *"Draft a follow-up to confirm Tuesday."*
+- Approve **`send_email`** or **`create_calendar_invite`** when prompted — nothing sends without your click.
+
+### 5. Commitments & calendar (45s)
+
+- **`G` then `T`** → Commitments (or **Waiting For** via palette).
+- Open **Calendar** → create a focus block or run **defrag** on a busy day.
+
+## What to look for (scoring hints)
+
+| Signal | Where |
+|--------|--------|
+| Corsair SDK reads/writes Gmail + Calendar | Archive, send, `M` flow, agent tools |
+| Typed MCP tools + approval gates | Agent chat — no silent sends |
+| AI triage quality | Lane tabs after connect |
+| Keyboard density | `j/k/e/r/m/s`, G-chords, `⌘K` palette |
+| Production polish | Undo, realtime lane updates, mobile drawer |
+
+## Visual assets
+
+Screenshots and hero GIF paths (drop files before final submission):
+
+- `/demo/hero.gif` — ≤ 90s `M` workflow loop
+- `/demo/inbox-triage.png` — lane + list
+- `/demo/agent-approval.png` — approval UI
+- `/demo/mobile-drawer.png` — mobile mailboxes
+
+See `public/demo/README.md` in the repo for the recording checklist.
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| "Access blocked" on Google sign-in | Email not in OAuth test users |
+| Empty semantic search | Wait for indexing banner to clear, or use advanced search (`Mod+Shift+F`) |
+| Agent won't send | Approve the tool card; check AI keys in Settings |
+| Calendar webhooks 503 | Team must set HTTPS `APP_URL` and renew watches |
+
+## Links
+
+- [Features](/docs/overview/features)
+- [Keyboard shortcuts](/docs/reference/keyboard-shortcuts)
+- [Corsair MCP tools](/docs/reference/corsair-mcp-tools)
+- [Judge OAuth access](/docs/overview/judge-access)

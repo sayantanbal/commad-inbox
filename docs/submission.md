@@ -13,7 +13,7 @@ Use this when submitting **Command Center Builder** (MacBook Giveaway Hackathon)
 | LinkedIn post | ☐ | _add post URL_ |
 | Short README | ✅ | [README.md](../README.md) |
 | Corsair features used | ✅ | [README — Corsair features](../README.md#corsair-features-used) |
-| Bonus tasks attempted | ✅ | [README — Bonus rubric](../README.md#bonus-tasks-attempted) |
+| Agent eval XML + Playwright approval test | ✅ | [`evaluations/inbox-agent.xml`](../evaluations/inbox-agent.xml), `e2e/agent-approval.spec.ts` |
 
 ## Demo video script
 
@@ -47,12 +47,17 @@ Add judge emails as Google OAuth test users — see [judge-oauth.md](./judge-oau
 
 ```bash
 bun install
-bun run build
-bun test
-bun run smoke:corsair   # optional — needs DATABASE_URL
+bun run smoke:submission   # unit tests + agent eval fixtures + build
+bun run validate:agent-eval
+bun run test:e2e           # Playwright — agent approval harness (E2E_TEST=1)
+bun run smoke:corsair      # optional — needs DATABASE_URL + OAuth tenant
 ```
 
+Agent eval set: [`evaluations/inbox-agent.xml`](../evaluations/inbox-agent.xml) (10 read-only Q&amp;A pairs; validated against `evaluations/fixtures/`).
+
 ### Deploy day (evening before record)
+
+See **[deploy-evening-checklist.md](./deploy-evening-checklist.md)** for the full step-by-step list.
 
 1. Deploy `main` to production (`command-inbox.sayantanbal.in`)
 2. Set `APP_URL` to production HTTPS on host
@@ -63,7 +68,7 @@ bun run smoke:corsair   # optional — needs DATABASE_URL
 
 ### Record day (morning)
 
-See [demo-script.md](./demo-script.md) pre-staging + recording checklist.
+See **[record-day-checklist.md](./record-day-checklist.md)** for video, social, and asset capture.
 
 Live checklist (see [deploy.md](./deploy.md#6-post-deploy-smoke-test)):
 

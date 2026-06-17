@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Command Inbox agent MCP evaluation set (read-only, fixture-backed).
+  Run: bun scripts/validate-agent-eval.ts
+  Nightly (optional): point agent at evaluations/fixtures with EVAL_FIXTURES=1
+-->
+<evaluation_set name="inbox-agent" version="1.0">
+  <metadata>
+    <description>Read-only Q&amp;A pairs verifiable against evaluations/fixtures/*.json</description>
+    <fixture_dir>evaluations/fixtures</fixture_dir>
+    <policy>OD-5: typed tools only — run_script is not available in production agent</policy>
+  </metadata>
+
+  <qa_pair id="cal-01" tool="list_calendar_events" fixture="calendar-events.json">
+    <question>Using list_calendar_events from 2026-06-20T00:00:00Z to 2026-06-21T00:00:00Z on the eval fixture calendar, what is the title of the event starting at 14:00 UTC?</question>
+    <answer>Product sync</answer>
+  </qa_pair>
+
+  <qa_pair id="cal-02" tool="list_calendar_events" fixture="calendar-events.json">
+    <question>How many calendar events does the eval fixture have on 2026-06-20 UTC (between midnight and midnight)?</question>
+    <answer>2</answer>
+  </qa_pair>
+
+  <qa_pair id="cal-03" tool="list_calendar_events" fixture="calendar-events.json">
+    <question>What is the summary of the eval fixture event with id evt-lunch?</question>
+    <answer>Lunch with investor</answer>
+  </qa_pair>
+
+  <qa_pair id="search-01" tool="search_threads" fixture="search-threads.json">
+    <question>On the eval fixture inbox, which lane is thread thread-schedule-001 classified in?</question>
+    <answer>schedule</answer>
+  </qa_pair>
+
+  <qa_pair id="search-02" tool="search_threads" fixture="search-threads.json">
+    <question>What is the subject of thread thread-reply-002 in the eval fixture search results?</question>
+    <answer>Re: Proposal feedback</answer>
+  </qa_pair>
+
+  <qa_pair id="search-03" tool="search_threads" fixture="search-threads.json">
+    <question>Who is the sender of thread thread-fyi-003 in the eval fixture?</question>
+    <answer>news@saasweekly.com</answer>
+  </qa_pair>
+
+  <qa_pair id="policy-01" tool="list_operations" fixture="agent-tools.json">
+    <question>Which Corsair MCP discovery tools are allowed in the Command Inbox agent allowlist?</question>
+    <answer>list_operations, get_schema</answer>
+  </qa_pair>
+
+  <qa_pair id="policy-02" tool="list_operations" fixture="agent-tools.json">
+    <question>Is run_script available to the production inbox agent per OD-5?</question>
+    <answer>no</answer>
+  </qa_pair>
+
+  <qa_pair id="policy-03" tool="send_email" fixture="agent-tools.json">
+    <question>Name three typed write tools that require user approval before execution.</question>
+    <answer>send_email, create_calendar_invite, schedule_send</answer>
+  </qa_pair>
+
+  <qa_pair id="policy-04" tool="get_thread_summary" fixture="agent-tools.json">
+    <question>Is get_thread_summary a read-only agent tool?</question>
+    <answer>yes</answer>
+  </qa_pair>
+</evaluation_set>

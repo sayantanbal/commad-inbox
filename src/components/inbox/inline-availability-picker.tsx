@@ -281,11 +281,13 @@ export function InlineAvailabilityPicker({
                   onMouseEnter={() => setHighlightIndex(index)}
                   className={cn(
                     "flex items-center gap-2 rounded-[8px] border px-3 py-2.5 text-left type-caption transition-colors",
-                    fromEmail && !isManualMode
+                    fromEmail && !isManualMode && !busy
                       ? "border-l-2 border-primary bg-[rgba(0,102,204,0.10)] text-ink"
-                      : "border-hairline text-ink hover:bg-pearl",
-                    busy && "opacity-60",
-                    isHighlight && "ring-2 ring-[color:var(--color-primary-focus)]"
+                      : "border-hairline text-ink",
+                    !busy && "hover:bg-pearl",
+                    busy &&
+                      "border-hairline bg-pearl/40 text-ink-muted-48 line-through decoration-ink-muted-48/60 cursor-not-allowed",
+                    isHighlight && !busy && "ring-2 ring-[color:var(--color-primary-focus)]"
                   )}
                 >
                   <Clock className="h-3.5 w-3.5 shrink-0 text-ink-muted-48" strokeWidth={1.75} />

@@ -50,6 +50,7 @@ interface ThreadViewProps {
   onDurationChange?: (minutes: 30 | 45 | 60) => void;
   previousSlotStart?: Date | null;
   onCustomScheduleTime?: () => void;
+  stickyMobileActions?: boolean;
 }
 
 function ShortcutButton({
@@ -110,6 +111,7 @@ export function ThreadView({
   onDurationChange,
   previousSlotStart,
   onCustomScheduleTime,
+  stickyMobileActions = false,
 }: ThreadViewProps) {
   if (!thread) {
     return (
@@ -262,6 +264,41 @@ export function ThreadView({
           ))}
         </div>
       </ScrollArea>
+
+      {stickyMobileActions && (
+        <div className="flex shrink-0 items-center justify-around gap-1 border-t border-hairline bg-canvas px-2 py-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] lg:hidden">
+          <MobileActionButton label="Reply" icon={Reply} onClick={onReply} />
+          <MobileActionButton label="Archive" icon={Archive} onClick={onArchive} />
+          <MobileActionButton
+            label={linkedMeeting ? "Reschedule" : "Meeting"}
+            icon={Calendar}
+            onClick={onSchedule}
+          />
+          <MobileActionButton label="Snooze" icon={Clock} onClick={onSnooze} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function MobileActionButton({
+  label,
+  icon: Icon,
+  onClick,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-11 min-w-[4.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[12px] font-medium text-ink"
+      aria-label={label}
+    >
+      <Icon className="h-5 w-5" strokeWidth={1.75} />
+      <span>{label}</span>
+    </button>
   );
 }

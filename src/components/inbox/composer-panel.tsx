@@ -187,7 +187,7 @@ export function ComposerPanel({
               className="block w-full rounded-[8px] px-3 py-2 text-left type-caption text-ink hover:bg-canvas transition-colors"
               onClick={() => insertSnippet(snippet)}
             >
-              <span className="font-mono text-ink-muted-48">//</span>
+              <span className="font-mono text-ink-muted-48">{"//"}</span>
               {snippet.name}
             </button>
           ))}

@@ -20,6 +20,7 @@ interface CommitmentsPanelProps {
   onSelectThread: (threadId: string) => void;
   onFulfill: (id: string) => void;
   onDismiss: (id: string) => void;
+  onReviewFollowUp?: (id: string) => void;
 }
 
 export function CommitmentsPanel({
@@ -33,6 +34,7 @@ export function CommitmentsPanel({
   onSelectThread,
   onFulfill,
   onDismiss,
+  onReviewFollowUp,
 }: CommitmentsPanelProps) {
   const { mine, waiting } = useMemo(() => {
     const mine: CommitmentItem[] = [];
@@ -102,6 +104,7 @@ export function CommitmentsPanel({
               onSelectThread={onSelectThread}
               onFulfill={onFulfill}
               onDismiss={onDismiss}
+              onReviewFollowUp={onReviewFollowUp}
             />
           )}
           {showWaiting && (
@@ -116,6 +119,7 @@ export function CommitmentsPanel({
               onSelectThread={onSelectThread}
               onFulfill={onFulfill}
               onDismiss={onDismiss}
+              onReviewFollowUp={onReviewFollowUp}
             />
           )}
         </div>
@@ -135,6 +139,7 @@ function Column({
   onSelectThread,
   onFulfill,
   onDismiss,
+  onReviewFollowUp,
 }: {
   heading: string;
   emptyTitle: string;
@@ -146,6 +151,7 @@ function Column({
   onSelectThread: (id: string) => void;
   onFulfill: (id: string) => void;
   onDismiss: (id: string) => void;
+  onReviewFollowUp?: (id: string) => void;
 }) {
   return (
     <section className="flex h-full min-h-0 flex-col">
@@ -173,6 +179,7 @@ function Column({
               onSelectThread={onSelectThread}
               onFulfill={onFulfill}
               onDismiss={onDismiss}
+              onReviewFollowUp={onReviewFollowUp}
             />
           ))
         )}
@@ -187,16 +194,19 @@ function Card({
   onSelectThread,
   onFulfill,
   onDismiss,
+  onReviewFollowUp,
 }: {
   item: CommitmentItem;
   waiting: boolean;
   onSelectThread: (id: string) => void;
   onFulfill: (id: string) => void;
   onDismiss: (id: string) => void;
+  onReviewFollowUp?: (id: string) => void;
 }) {
   const due = item.dueDate ? new Date(item.dueDate) : null;
-  const overdue = due ? isPast(due) && item.status !== "done" : false;
-  const done = item.status === "done";
+  const overdue = due ? isPast(due) && item.status !== "fulfilled" : false;
+  const done = item.status === "fulfilled";
+  const hasFollowUpDraft = Boolean(item.followUpDraftHtml?.trim());
 
   return (
     <article
@@ -253,12 +263,14 @@ function Card({
           {waiting ? (
             <button
               type="button"
-              onClick={() => onFulfill(item.id)}
+              onClick={() =>
+                onReviewFollowUp ? onReviewFollowUp(item.id) : onFulfill(item.id)
+              }
               className="btn-pearl-capsule type-fine"
               style={{ padding: "4px 10px" }}
             >
               <Bell className="h-3 w-3" strokeWidth={1.75} />
-              Send nudge
+              {hasFollowUpDraft ? "Review follow-up" : "Send nudge"}
             </button>
           ) : (
             <button

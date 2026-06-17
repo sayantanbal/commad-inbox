@@ -8,12 +8,15 @@ import {
   featureTabCopy,
   mockContacts,
   mockPreBrief,
+  mockScheduleSlots,
+  mockScheduleThread,
   mockSendTime,
   mockSnippetResult,
   mockWaitingFor,
 } from "@/components/home/mock/demo-data";
 
 const tabs = [
+  { id: "schedule", label: "Schedule", key: "M" },
   { id: "commitments", label: "Commitments", key: "W" },
   { id: "prebrief", label: "Pre-Brief", key: "B" },
   { id: "people", label: "People", key: null },
@@ -55,6 +58,8 @@ export function FeatureShowcase() {
   const [snippetText, setSnippetText] = useState("");
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
   const [sendTimeHighlight, setSendTimeHighlight] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
@@ -76,6 +81,8 @@ export function FeatureShowcase() {
     setSnippetText("");
     setSelectedContact(null);
     setSendTimeHighlight(false);
+    setScheduleOpen(false);
+    setSelectedSlot(null);
   }, []);
 
   const runDemo = useCallback(
@@ -85,6 +92,10 @@ export function FeatureShowcase() {
 
       if (reduceMotion) {
         switch (tab) {
+          case "schedule":
+            setScheduleOpen(true);
+            setSelectedSlot(mockScheduleSlots[2]?.time ?? null);
+            break;
           case "commitments":
             setWaitingOpen(true);
             break;
@@ -111,6 +122,17 @@ export function FeatureShowcase() {
       }
 
       switch (tab) {
+        case "schedule":
+          schedule(() => setPhase(1), 400);
+          schedule(() => {
+            setScheduleOpen(true);
+            setPhase(2);
+          }, 900);
+          schedule(() => {
+            setSelectedSlot(mockScheduleSlots[2]?.time ?? null);
+            setPhase(3);
+          }, 1600);
+          break;
         case "commitments":
           schedule(() => setPhase(1), 400);
           schedule(() => {
@@ -181,7 +203,7 @@ export function FeatureShowcase() {
   );
 
   useEffect(() => {
-    runDemo("commitments");
+    runDemo("schedule");
     return clearTimers;
   }, [clearTimers, runDemo]);
 
@@ -190,6 +212,10 @@ export function FeatureShowcase() {
       const target = event.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
+      if (event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        selectTab("schedule");
+      }
       if (event.key.toLowerCase() === "w") {
         event.preventDefault();
         selectTab("commitments");
@@ -222,10 +248,10 @@ export function FeatureShowcase() {
         Command Inbox remembers what email apps forget.
       </h2>
       <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-        Try the shortcuts in each tab —{" "}
+        Start with <kbd className="rounded border px-1 font-mono text-sm">M</kbd> to schedule — then try{" "}
         <kbd className="rounded border px-1 font-mono text-sm">W</kbd>,{" "}
         <kbd className="rounded border px-1 font-mono text-sm">B</kbd>,{" "}
-        <kbd className="rounded border px-1 font-mono text-sm">T</kbd> work in this demo.
+        <kbd className="rounded border px-1 font-mono text-sm">T</kbd> in other tabs.
       </p>
 
       <div className="mt-8 flex flex-wrap gap-2">
@@ -266,6 +292,64 @@ export function FeatureShowcase() {
 
       <div className="mt-4 overflow-hidden rounded-lg border border-border bg-card">
         <AnimatePresence mode="wait">
+          {active === "schedule" && (
+            <motion.div key="schedule" {...motionProps} className="p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold">{mockScheduleThread.subject}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    From {mockScheduleThread.sender} · Schedule lane
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setScheduleOpen(true);
+                    setSelectedSlot(mockScheduleSlots[2]?.time ?? null);
+                    setPhase(3);
+                  }}
+                >
+                  Press M
+                </Button>
+              </div>
+              <AnimatePresence>
+                {scheduleOpen ? (
+                  <motion.div
+                    className="mt-4 space-y-3"
+                    initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <p className="text-sm text-muted-foreground">Pick a slot — busy times grayed out.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {mockScheduleSlots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          disabled={slot.busy}
+                          onClick={() => setSelectedSlot(slot.time)}
+                          className={cn(
+                            "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                            slot.busy && "cursor-not-allowed opacity-40",
+                            selectedSlot === slot.time
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border hover:border-primary/50"
+                          )}
+                        >
+                          {slot.time}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedSlot ? (
+                      <p className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-sm">
+                        Calendar invite sent · confirmation draft ready in composer.
+                      </p>
+                    ) : null}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </motion.div>
+          )}
           {active === "commitments" && (
             <motion.div key="commitments" {...motionProps} className="p-6">
               <div className="flex items-center justify-between">

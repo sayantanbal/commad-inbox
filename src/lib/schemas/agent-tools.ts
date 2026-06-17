@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { threadIdField } from "@/lib/schemas/domain";
+import { threadIdField, triageLaneSchema } from "@/lib/schemas/domain";
 import { LIMITS } from "@/lib/schemas/limits";
 import {
   boundedString,
@@ -77,4 +77,76 @@ export const stageThreadAttachmentToolInputSchema = strictObject({
   filename: nonEmptyBoundedString(LIMITS.FILENAME, "filename"),
   mimeType: nonEmptyBoundedString(LIMITS.MIME_TYPE, "mimeType"),
   sizeBytes: z.number().int().min(1).max(25 * 1024 * 1024),
+});
+
+export const searchThreadsToolInputSchema = strictObject({
+  q: boundedString(LIMITS.SEARCH_QUERY, "q").optional(),
+  lane: triageLaneSchema.optional(),
+  limit: z.number().int().min(1).max(30).default(10),
+});
+
+export const draftCommitmentFollowUpToolInputSchema = strictObject({
+  commitmentId: nonEmptyBoundedString(LIMITS.COMMITMENT_ID, "commitmentId"),
+});
+
+export const getThreadSummaryToolInputSchema = strictObject({
+  threadId: threadIdField,
+});
+
+export const cancelMeetingWithNoticeToolInputSchema = strictObject({
+  threadId: threadIdField,
+});
+
+export const sendEmailToolOutputSchema = strictObject({
+  messageId: nonEmptyBoundedString(LIMITS.MESSAGE_ID, "messageId"),
+  recipients: z.array(z.string().email()).min(1),
+  attachmentCount: z.number().int().min(0),
+  summary: boundedString(LIMITS.MEDIUM_STRING, "summary"),
+});
+
+export const createCalendarInviteToolOutputSchema = strictObject({
+  eventId: nonEmptyBoundedString(LIMITS.EVENT_ID, "eventId"),
+  summary: nonEmptyBoundedString(LIMITS.SHORT_STRING, "summary"),
+  start: z.string(),
+  hangoutLink: boundedString(LIMITS.URL, "hangoutLink").optional(),
+  htmlLink: boundedString(LIMITS.URL, "htmlLink").optional(),
+  summaryText: boundedString(LIMITS.MEDIUM_STRING, "summaryText"),
+});
+
+export const listCalendarEventsToolOutputSchema = strictObject({
+  count: z.number().int().min(0),
+  events: z.array(
+    strictObject({
+      id: boundedString(LIMITS.EVENT_ID, "id"),
+      summary: boundedString(LIMITS.SHORT_STRING, "summary"),
+      start: z.string(),
+    })
+  ),
+});
+
+export const cancelMeetingWithNoticeToolOutputSchema = strictObject({
+  threadId: threadIdField,
+  eventId: nonEmptyBoundedString(LIMITS.EVENT_ID, "eventId"),
+  scheduledSendId: z.string().uuid(),
+  summary: boundedString(LIMITS.MEDIUM_STRING, "summary"),
+});
+
+export const scheduleSendToolOutputSchema = strictObject({
+  scheduledSendId: z.string().uuid(),
+  sendAt: z.string(),
+  recipients: z.array(z.string().email()).min(1),
+  attachmentCount: z.number().int().min(0),
+  summary: boundedString(LIMITS.MEDIUM_STRING, "summary"),
+});
+
+export const searchThreadsToolOutputSchema = strictObject({
+  count: z.number().int().min(0),
+  threads: z.array(
+    strictObject({
+      threadId: threadIdField,
+      subject: boundedString(LIMITS.EMAIL_SUBJECT, "subject"),
+      sender: boundedString(LIMITS.SHORT_STRING, "sender"),
+      lane: triageLaneSchema,
+    })
+  ),
 });

@@ -46,10 +46,13 @@ export function UndoToast({ undo, onDismiss }: UndoToastProps) {
     <AnimatePresence>
       {undo && (
         <motion.div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
-          className="fixed bottom-20 left-1/2 z-50 w-full max-w-md -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-popover shadow-lg"
+          className="fixed bottom-20 left-1/2 z-50 w-full max-w-md -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-popover shadow-lg pb-[env(safe-area-inset-bottom)]"
         >
           <div
             className="h-0.5 bg-primary transition-[width] duration-75 ease-linear"

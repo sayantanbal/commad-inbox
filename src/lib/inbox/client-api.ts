@@ -210,6 +210,16 @@ export async function cancelMeetingApi(threadId: string) {
   return response.json() as Promise<{ eventId: string }>;
 }
 
+export async function fetchMeetingCancelDraftApi(threadId: string) {
+  const response = await fetch("/api/inbox/meeting/cancel-draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ threadId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{ draftHtml: string; eventId: string }>;
+}
+
 export async function createFocusBlockApi(input: {
   start: Date;
   durationMinutes?: number;
@@ -454,6 +464,23 @@ export interface CommitmentItem {
   counterpartyEmail: string;
   status: string;
   confidence: number;
+  followUpDraftHtml?: string | null;
+  followUpDraftQueuedAt?: string | null;
+}
+
+export async function prepareCommitmentFollowUpApi(commitmentId: string) {
+  const response = await fetch("/api/inbox/commitments/follow-up", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commitmentId }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return response.json() as Promise<{
+    draftHtml: string;
+    threadId: string;
+    counterpartyEmail: string;
+    generated: boolean;
+  }>;
 }
 
 export async function fetchCommitmentsApi(view?: "commitments" | "waiting") {
@@ -600,6 +627,7 @@ export async function fetchFreeBusyApi(emails: string[], start: Date, end: Date)
   if (!response.ok) throw new Error(await parseError(response));
   return response.json() as Promise<{
     busy: Record<string, Array<{ start: string; end: string }>>;
+    source: "google-freebusy" | "corsair-calendar-events-fallback";
   }>;
 }
 

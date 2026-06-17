@@ -1,9 +1,4 @@
-import {
-  convertToModelMessages,
-  stepCountIs,
-  streamText,
-  type UIMessage,
-} from "ai";
+import { type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/lib/api/parse-json-body";
 import { requireSessionApi } from "@/lib/api/require-session";
@@ -12,8 +7,8 @@ import { resolveAgentModelProvider } from "@/lib/ai/with-fallback";
 import { getChatModel } from "@/lib/ai/models";
 import { resolveApiKey } from "@/lib/ai/key-store";
 import { agentStreamErrorHandler } from "@/lib/agent/error-handler";
-import { buildAgentMcpTools } from "@/lib/agent/mcp-tools";
-import { buildAgentSystemPrompt } from "@/lib/agent/system-prompt";
+import { buildAllAgentTools } from "@/lib/agent/mcp-tools";
+import { createInboxAgentStream } from "@/lib/agent/inbox-agent";
 import { NoAiProviderError } from "@/lib/ai/with-fallback";
 import { assertAiAvailable } from "@/lib/ai/runtime";
 import { aiErrorResponse } from "@/lib/api/ai-error-response";
@@ -51,7 +46,7 @@ export async function POST(request: Request) {
       pendingIds.length > 0
         ? await listOutboundAttachmentMeta(auth.userId, pendingIds)
         : [];
-    const tools = buildAgentMcpTools(auth.tenant, auth.userId, auth.userEmail);
+    const tools = await buildAllAgentTools(auth.tenant, auth.userId, auth.userEmail);
     const activeProvider = await resolveAgentModelProvider(auth.userId, provider);
     const apiKey = await resolveApiKey(auth.userId, activeProvider);
     if (!apiKey) {
@@ -63,17 +58,14 @@ export async function POST(request: Request) {
       throw new NoAiProviderError();
     }
 
-    const result = streamText({
+    const result = await createInboxAgentStream({
       model,
-      system: buildAgentSystemPrompt(
-        auth.userEmail,
-        mentionContext,
-        stagedAttachments,
-        parsed.data.openThread ?? null
-      ),
-      messages: await convertToModelMessages(messages),
+      userEmail: auth.userEmail,
+      messages,
       tools,
-      stopWhen: stepCountIs(8),
+      mentionContext,
+      stagedAttachments,
+      openThread: parsed.data.openThread ?? null,
     });
 
     return result.toUIMessageStreamResponse({

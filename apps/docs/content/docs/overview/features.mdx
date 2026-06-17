@@ -45,7 +45,7 @@ Reschedule with **`M`** again on a thread that already has a linked meeting. Can
 
 ### Agent chat
 
-An in-app agent uses **Corsair MCP tools** to read mail, inspect schemas, and run scripts against Gmail and Calendar. Destructive **`run_script`** actions require explicit user approval in the UI.
+An in-app agent uses **typed workflow tools** (`send_email`, `create_calendar_invite`, `search_threads`, etc.) plus Corsair **discovery** tools (`list_operations`, `get_schema`). Write actions require explicit user approval in the UI. `run_script` is not used in the in-app agent.
 
 Example prompt:
 
@@ -99,5 +99,5 @@ Gmail **Pub/Sub push** → Corsair webhook handler → classify + embed → **Pu
 
 - Gmail + Google Calendar plugins (embedded SDK, multi-tenant)
 - Webhook-driven cache sync
-- MCP adapter (`list_operations`, `get_schema`, `run_script`)
+- MCP adapter (`list_operations`, `get_schema`) + typed write tools with approval
 - Gmail `threads.list` for advanced search

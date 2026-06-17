@@ -31,7 +31,7 @@ export function MobileTabBar({ active, onChange }: MobileTabBarProps) {
             type="button"
             onClick={() => onChange(id)}
             className={cn(
-              "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-[10px] font-medium transition-colors",
+              "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-medium transition-colors min-h-11",
               active === id ? "text-primary" : "text-muted-foreground"
             )}
           >
@@ -55,7 +55,7 @@ export function MobileCommandFab({ modLabel, onOpenPalette }: MobileCommandFabPr
       type="button"
       aria-label="Open command palette"
       onClick={onOpenPalette}
-      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg lg:hidden"
+      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-12 w-12 min-h-11 min-w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg lg:hidden"
     >
       <Command className="h-5 w-5" />
       <span className="sr-only">{modLabel}K commands</span>

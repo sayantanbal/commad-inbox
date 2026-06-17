@@ -31,16 +31,16 @@ After sign-in you are redirected to **Connect Google** (`/onboarding/connect`).
 
 Both integrations must show as connected before the inbox loads.
 
-## Step 4 — Wait for backfill
+## Step 4 — Wait for indexing
 
-On first connect, Command Inbox classifies your latest **50 INBOX threads**. An activity banner shows progress.
+On first connect, Command Inbox runs a **two-phase index**:
 
-Backfill must complete before:
+1. **Immediate** — classifies your latest ~50 INBOX threads so lanes are usable within about a minute
+2. **Background** — continues indexing your full INBOX into semantic search (progress banner on `/inbox`)
 
-- Semantic search (`/`) returns results
-- Lanes reflect your full recent inbox
+Semantic search (`/`) improves as more threads are indexed. **Advanced search** (`Mod+Shift+F`) queries Gmail directly via Corsair anytime — no index required.
 
-This usually takes under a minute depending on AI provider latency.
+This usually takes under a minute for lanes; full inbox indexing may run longer depending on mailbox size and AI latency.
 
 ## Step 5 — Explore the inbox
 
@@ -57,11 +57,28 @@ Use **`J`** and **`K`** to move between threads. Press **`?`** for the full shor
 
 ## Step 6 — Try the hero workflow
 
+![Schedule lane with thread list](/demo/inbox-triage.png)
+
 1. Open a thread in the **Schedule** lane (or any email mentioning meeting times)
 2. Press **`M`**
 3. Review extracted attendees and proposed times
 4. Click an available slot
 5. Confirm — calendar invite sends and a confirmation draft appears in the composer
+
+![Agent approval gate for send and calendar tools](/demo/agent-approval.png)
+
+## Visual walkthrough
+
+Screenshots and a hero GIF are hosted on the production app (add before final submission):
+
+| Asset | Path |
+|-------|------|
+| Hero `M` workflow (GIF) | `/demo/hero.gif` |
+| Inbox triage lanes | `/demo/inbox-triage.png` |
+| Agent approval UI | `/demo/agent-approval.png` |
+| Mobile navigation | `/demo/mobile-drawer.png` |
+
+See `public/demo/README.md` in the repo for capture dimensions.
 
 ## AI provider switcher
 

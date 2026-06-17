@@ -2,15 +2,11 @@ import "server-only";
 
 import { addBusinessDays } from "date-fns";
 import { and, eq, isNull } from "drizzle-orm";
-import { generateTextWithProvider } from "@/lib/ai/generate";
-import { getDefaultProvider } from "@/lib/ai/with-fallback";
-import { markFollowUpQueued } from "@/lib/commitments/queries";
+import { generateFollowUpDraftHtml } from "@/lib/commitments/generate-follow-up";
+import { saveFollowUpDraft } from "@/lib/commitments/follow-up-draft";
 import { db } from "@/lib/db";
 import { commitments } from "@/lib/db/schema";
 import { getUserPreferences } from "@/lib/focus/window";
-
-const FOLLOW_UP_SYSTEM = `Write a brief, professional follow-up email body (HTML with <p> tags only).
-The other party promised something but has not replied. Reference the commitment naturally. 2-3 sentences max.`;
 
 export async function processCommitmentFollowUps(
   userId: string,
@@ -35,13 +31,15 @@ export async function processCommitmentFollowUps(
   for (const row of rows) {
     if (row.extractedAt > cutoff) continue;
 
-    const prompt = `Commitment: "${row.text}"\nCounterparty: ${row.counterpartyEmail}\nDays waiting: ${prefs.followUpDaysDefault}`;
     try {
-      const preferred = await getDefaultProvider(userId);
-      const { text } = await generateTextWithProvider(userId, preferred, prompt, FOLLOW_UP_SYSTEM);
-      await markFollowUpQueued(userId, row.id);
+      const draftHtml = await generateFollowUpDraftHtml(userId, {
+        text: row.text,
+        counterpartyEmail: row.counterpartyEmail,
+        followUpDaysDefault: prefs.followUpDaysDefault,
+      });
+      await saveFollowUpDraft(userId, row.id, draftHtml);
       queued++;
-      console.info(`[follow-up] queued draft for ${row.id}`, text.slice(0, 80));
+      console.info(`[follow-up] saved draft for ${row.id}`, draftHtml.slice(0, 80));
     } catch (error) {
       console.error("[follow-up] failed for", row.id, error);
     }

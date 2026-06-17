@@ -12,6 +12,8 @@ A keyboard-first Gmail + Google Calendar command center built on [Corsair](https
 - **Agent chat** — Corsair MCP discovery tools + approval-gated `send_email` / `create_calendar_invite`; native Gmail attachments (upload or forward from thread, up to ~20 MB per file) with approval preview
 - **Command palette & shortcuts** — Superhuman-style keys; PWA + mobile tabs
 
+> **For judges:** Start with the [Evaluator guide](https://docs.command-inbox.sayantanbal.in/docs/overview/evaluator-guide) (5-minute script). Add your Gmail to OAuth **Test users** first — see [Judge access](https://docs.command-inbox.sayantanbal.in/docs/overview/judge-access). Hero demo: **Schedule** lane → **`M`** → pick slot → send confirmation.
+
 ## Architecture
 
 ```mermaid
@@ -187,6 +189,11 @@ Keep the OAuth app in **Testing** and add judge emails as test users. See **[doc
 ## Hackathon submission
 
 Full checklist: **[docs/submission.md](docs/submission.md)**
+
+| Phase | Checklist |
+|-------|-----------|
+| Deploy tonight | **[docs/deploy-evening-checklist.md](docs/deploy-evening-checklist.md)** |
+| Record tomorrow | **[docs/record-day-checklist.md](docs/record-day-checklist.md)** |
 
 | Deliverable | Link |
 |-------------|------|

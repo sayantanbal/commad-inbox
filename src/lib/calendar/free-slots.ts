@@ -90,6 +90,30 @@ export interface BusyInterval {
   end: Date;
 }
 
+export interface BusyWindow {
+  start: string;
+  end: string;
+}
+
+/** Pure helper — map calendar events to busy windows within a range. */
+export function eventsToBusyWindows(
+  events: Array<{ start: Date; end: Date }>,
+  rangeStart: Date,
+  rangeEnd: Date
+): BusyWindow[] {
+  const busy: BusyWindow[] = [];
+  for (const event of events) {
+    if (event.end <= rangeStart || event.start >= rangeEnd) {
+      continue;
+    }
+    busy.push({
+      start: event.start.toISOString(),
+      end: event.end.toISOString(),
+    });
+  }
+  return busy;
+}
+
 export function isSlotBusyForAttendees(
   attendeeBusy: BusyInterval[],
   start: Date,

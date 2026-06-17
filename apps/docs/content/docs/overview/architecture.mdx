@@ -94,7 +94,7 @@ GET /inbox (RSC)
   → Render lanes with cached metadata
 ```
 
-If backfill is incomplete, an activity banner shows progress while the latest 50 INBOX threads are classified.
+If indexing is incomplete, an activity banner shows progress: first ~50 threads for lanes, then background full INBOX indexing for semantic search.
 
 ### 3. Hero workflow (`M`)
 
@@ -125,9 +125,9 @@ User types query
 ```
 User sends message
   → POST /api/agent/chat (streaming)
-  → buildAgentMcpTools(tenant)
-  → Vercel AI SDK streamText with tools
-  → run_script calls pause for approval (needsApproval: true)
+  → createInboxAgentStream() with buildAgentMcpTools(tenant)
+  → Vercel AI SDK streamText with typed + discovery tools
+  → send_email / create_calendar_invite pause for approval (needsApproval: true)
   → User approves → tool executes → stream continues
 ```
 

@@ -130,7 +130,7 @@ Failures during async classification are logged; verified webhooks still return 
 ## Verify end-to-end
 
 1. Sign in and complete Connect Google
-2. Open `/inbox` — backfill classifies latest 50 INBOX threads
+2. Open `/inbox` — immediate index classifies latest threads; full INBOX index continues in background
 3. Send yourself a test email — lane should update within ~30s
 4. Press `/` for semantic search after backfill completes
 5. Check `webhook_logs` table for delivery debugging

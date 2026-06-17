@@ -98,3 +98,38 @@ Write a short confirmation reply (2-4 sentences, professional tone). Return plai
     );
   }
 }
+
+export async function generateCancellationDraft(input: {
+  userId: string;
+  thread: Thread;
+  slotStart: Date;
+  durationMinutes: number;
+  provider?: AiProvider;
+}): Promise<string> {
+  const { format } = await import("date-fns");
+  const when = format(input.slotStart, "EEEE, MMMM d 'at' h:mm a");
+  const preferred = input.provider ?? (await getDefaultProvider(input.userId));
+
+  try {
+    const prompt = `Thread subject: ${input.thread.subject}
+Latest message:
+${input.thread.messages.at(-1)?.body ?? input.thread.snippet}
+
+Cancelled meeting was scheduled for: ${when} (${input.durationMinutes} minutes)
+
+Write a short cancellation notice (2-3 sentences, professional). Apologize briefly and offer to reschedule. Plain text only.`;
+
+    const { text: draft } = await generateTextWithProvider(
+      input.userId,
+      preferred,
+      prompt,
+      "You draft concise meeting cancellation emails. Plain text only, no subject line."
+    );
+    return textToHtml(draft);
+  } catch (error) {
+    console.warn("[draft] cancellation AI unavailable, using template:", error);
+    return textToHtml(
+      `I need to cancel our meeting scheduled for ${when}. I apologize for the inconvenience — please let me know if you'd like to find another time.`
+    );
+  }
+}

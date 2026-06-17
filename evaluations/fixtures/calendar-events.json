@@ -1,0 +1,27 @@
+{
+  "account": "eval-demo@command-inbox.test",
+  "timezone": "UTC",
+  "events": [
+    {
+      "id": "evt-product-sync",
+      "summary": "Product sync",
+      "start": "2026-06-20T14:00:00.000Z",
+      "end": "2026-06-20T14:30:00.000Z",
+      "attendees": ["alice@acme.com", "eval-demo@command-inbox.test"]
+    },
+    {
+      "id": "evt-standup",
+      "summary": "Daily standup",
+      "start": "2026-06-20T09:00:00.000Z",
+      "end": "2026-06-20T09:15:00.000Z",
+      "attendees": ["eval-demo@command-inbox.test"]
+    },
+    {
+      "id": "evt-lunch",
+      "summary": "Lunch with investor",
+      "start": "2026-06-21T12:00:00.000Z",
+      "end": "2026-06-21T13:00:00.000Z",
+      "attendees": ["investor@fund.com", "eval-demo@command-inbox.test"]
+    }
+  ]
+}

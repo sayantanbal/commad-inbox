@@ -72,8 +72,10 @@ export function PeoplePageClient() {
                 : `AI-analyzed from ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`}
             </p>
           </div>
-          <p className="type-caption text-ink-muted-48 inline-flex items-center gap-2">
-            Press <KbdBadge>/</KbdBadge> to filter
+          <p className="type-caption text-ink-muted-48">
+            Filter contacts below — semantic search lives in the inbox (
+            <KbdBadge>/</KbdBadge> on <Link href="/inbox" className="underline hover:text-ink">/inbox</Link>
+            )
           </p>
         </div>
 

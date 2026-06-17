@@ -125,6 +125,8 @@ export function mapCommitmentRow(row: typeof commitments.$inferSelect) {
     status: row.status,
     confidence: row.confidence,
     extractedAt: row.extractedAt.toISOString(),
+    followUpDraftHtml: row.followUpDraftHtml ?? null,
+    followUpDraftQueuedAt: row.followUpDraftQueuedAt?.toISOString() ?? null,
   };
 }
 

@@ -7,28 +7,24 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { broadcastInboxEvent } from "@/lib/realtime/pusher";
 import { eq } from "drizzle-orm";
-import { shouldClassifyGmailEvent } from "@/lib/webhooks/gmail-event-filter";
+import { shouldClassifyGmailEvent, getClassifyThreadIdFromGmailWebhook } from "@/lib/webhooks/gmail-event-filter";
 
 export { shouldClassifyGmailEvent } from "@/lib/webhooks/gmail-event-filter";
-
-type GmailWebhookEvent = {
-  type?: string;
-  message?: { threadId?: string };
-};
 
 export async function handleGmailMessageChanged(
   tenantId: string,
   body: unknown
 ): Promise<void> {
-  const event = body as GmailWebhookEvent;
-
   await broadcastInboxEvent(tenantId, { type: "inbox-changed", reason: "gmail" });
 
   if (!shouldClassifyGmailEvent(body)) {
     return;
   }
 
-  const threadId = event.message!.threadId!;
+  const threadId = getClassifyThreadIdFromGmailWebhook(body);
+  if (!threadId) {
+    return;
+  }
   const tenant = corsair.withTenant(tenantId);
   const classification = await classifyThreadForUser(tenantId, tenant, threadId);
   await invalidateDailyBriefCache(tenantId);

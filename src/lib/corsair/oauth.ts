@@ -3,11 +3,12 @@ import { generateOAuthUrl } from "corsair/oauth";
 import type { CorsairPluginId } from "@/lib/corsair/connection";
 import { corsair } from "@/lib/corsair";
 import { getAppUrl } from "@/lib/env";
+import { buildCorsairRedirectUri, OAUTH_STATE_COOKIE } from "@/lib/corsair/oauth-url";
 
-export const OAUTH_STATE_COOKIE = "oauth_state";
+export { OAUTH_STATE_COOKIE } from "@/lib/corsair/oauth-url";
 
 export function getCorsairRedirectUri(): string {
-  return `${getAppUrl()}/api/auth/callback/corsair`;
+  return buildCorsairRedirectUri(getAppUrl());
 }
 
 export async function startPluginOAuth(

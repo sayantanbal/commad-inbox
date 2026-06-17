@@ -3,6 +3,9 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { validateCalendarWebhookChannel } from "@/lib/webhooks/calendar-channel-validation";
+
+export { validateCalendarWebhookChannel } from "@/lib/webhooks/calendar-channel-validation";
 
 export async function verifyCalendarWebhookChannel(
   tenantId: string,
@@ -18,23 +21,10 @@ export async function verifyCalendarWebhookChannel(
     .where(eq(users.id, tenantId))
     .limit(1);
 
-  const expectedToken = user?.calendarWatchChannelToken;
-  if (!expectedToken) {
-    return {
-      ok: false,
-      status: 503,
-      message: "Calendar watch not configured — renew watches for this tenant",
-    };
-  }
-
-  if (!channelToken || channelToken !== expectedToken) {
-    return { ok: false, status: 401, message: "Invalid channel token" };
-  }
-
-  const expectedChannelId = user?.calendarWatchChannelId;
-  if (expectedChannelId && channelId && channelId !== expectedChannelId) {
-    return { ok: false, status: 401, message: "Invalid channel id" };
-  }
-
-  return { ok: true };
+  return validateCalendarWebhookChannel(
+    user?.calendarWatchChannelToken,
+    channelToken,
+    user?.calendarWatchChannelId,
+    channelId
+  );
 }

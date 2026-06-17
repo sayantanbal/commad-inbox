@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { InboxShellSkeleton } from "@/components/inbox/inbox-shell-skeleton";
 import { deserializeInboxData, type SerializedInboxData } from "@/lib/inbox-serialize";
@@ -38,21 +39,23 @@ export function InboxClient({
 }: InboxClientProps) {
   const data = deserializeInboxData(initialData);
   return (
-    <InboxShell
-      threads={data.threads}
-      classifications={data.classifications}
-      events={data.events}
-      threadMeetings={data.threadMeetings}
-      userId={userId}
-      userEmail={userEmail}
-      backfillComplete={backfillComplete}
-      indexStatus={indexStatus}
-      initialSnoozes={initialSnoozes.map((snooze) => ({
-        threadId: snooze.threadId,
-        until: new Date(snooze.until),
-      }))}
-      initialOpenSettings={initialOpenSettings}
-      googleContactsReturn={googleContactsReturn}
-    />
+    <Suspense fallback={<InboxShellSkeleton message="Preparing your workspace…" />}>
+      <InboxShell
+        threads={data.threads}
+        classifications={data.classifications}
+        events={data.events}
+        threadMeetings={data.threadMeetings}
+        userId={userId}
+        userEmail={userEmail}
+        backfillComplete={backfillComplete}
+        indexStatus={indexStatus}
+        initialSnoozes={initialSnoozes.map((snooze) => ({
+          threadId: snooze.threadId,
+          until: new Date(snooze.until),
+        }))}
+        initialOpenSettings={initialOpenSettings}
+        googleContactsReturn={googleContactsReturn}
+      />
+    </Suspense>
   );
 }

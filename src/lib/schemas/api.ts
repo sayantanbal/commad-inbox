@@ -104,7 +104,7 @@ export const advancedSearchBodySchema = strictObject({
 
 export const agentChatBodySchema = strictObject({
   messages: z.array(uiMessageSchema).max(LIMITS.MESSAGES).default([]),
-  provider: aiProviderSchema.default("openai"),
+  provider: aiProviderSchema.default("gemini"),
   conversationId: nonEmptyBoundedString(LIMITS.CONVERSATION_ID, "conversationId").optional(),
   mentionedContacts: z
     .array(
@@ -190,6 +190,10 @@ export const commitmentPatchBodySchema = strictObject({
 });
 
 export const commitmentConfirmBodySchema = strictObject({
+  commitmentId: nonEmptyBoundedString(LIMITS.COMMITMENT_ID, "commitmentId"),
+});
+
+export const commitmentFollowUpBodySchema = strictObject({
   commitmentId: nonEmptyBoundedString(LIMITS.COMMITMENT_ID, "commitmentId"),
 });
 
