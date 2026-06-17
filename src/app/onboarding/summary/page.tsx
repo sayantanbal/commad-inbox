@@ -4,12 +4,14 @@ import { auth } from "@/lib/auth";
 import { isTenantFullyConnected } from "@/lib/corsair/connection";
 import { getUserPreferences } from "@/lib/focus/window";
 import { isOnboardingComplete } from "@/lib/onboarding/status";
+import { parseOnboardingContactsStatus } from "@/lib/contacts/onboarding-contacts-status";
 import { SummaryClient } from "./summary-client";
 
 interface SummaryPageProps {
   searchParams: Promise<{
     contacts?: string;
     count?: string;
+    import?: string;
   }>;
 }
 
@@ -30,11 +32,9 @@ export default async function SummaryPage({ searchParams }: SummaryPageProps) {
   }
 
   const params = await searchParams;
-  const contactsStatus =
-    params.contacts === "imported" || params.contacts === "gmail" || params.contacts === "skipped"
-      ? params.contacts
-      : "skipped";
+  const contactsStatus = parseOnboardingContactsStatus(params.contacts);
   const contactCount = Number(params.count ?? "0") || 0;
+  const importPending = params.import === "pending";
 
   return (
     <div className="flex min-h-screen flex-col bg-parchment">
@@ -60,7 +60,11 @@ export default async function SummaryPage({ searchParams }: SummaryPageProps) {
             </p>
 
             <div className="mt-8">
-              <SummaryClient contactsStatus={contactsStatus} contactCount={contactCount} />
+              <SummaryClient
+                contactsStatus={contactsStatus}
+                contactCount={contactCount}
+                importPending={importPending}
+              />
             </div>
           </div>
         </div>

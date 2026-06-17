@@ -21,16 +21,24 @@ import {
   fetchGoogleContactsStatusApi,
   syncGoogleContactsApi,
 } from "@/lib/inbox/client-api";
+import {
+  formatGoogleContactsImportMessage,
+  useGoogleContactsPendingImport,
+} from "@/lib/contacts/use-google-contacts-pending-import";
 import { inboxQueryKeys } from "@/lib/inbox/query-keys";
 
 const PAGE_SIZE = 20;
-const GOOGLE_RETURN_TO = encodeURIComponent("/inbox?openSettings=contacts&googleContacts=connected");
+const GOOGLE_RETURN_TO = encodeURIComponent("/inbox?openSettings=contacts&googleContacts=pending");
 
 interface ContactsSettingsProps {
   googleContactsReturn?: string | null;
+  googleContactsCount?: number | null;
 }
 
-export function ContactsSettings({ googleContactsReturn }: ContactsSettingsProps) {
+export function ContactsSettings({
+  googleContactsReturn,
+  googleContactsCount,
+}: ContactsSettingsProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -74,14 +82,41 @@ export function ContactsSettings({ googleContactsReturn }: ContactsSettingsProps
     staleTime: 30_000,
   });
 
+  const onPendingImportComplete = useCallback(async () => {
+    await invalidateContacts();
+    void refetchGoogle();
+    void refetchList();
+  }, [invalidateContacts, refetchGoogle, refetchList]);
+
+  const pendingImport = useGoogleContactsPendingImport(
+    googleContactsReturn === "pending",
+    () => {
+      void onPendingImportComplete();
+    }
+  );
+
   useEffect(() => {
     if (googleContactsReturn === "connected") {
-      setImportNotice("Google Contacts connected and imported.");
       void invalidateContacts();
+      if (googleContactsCount != null && googleContactsCount > 0) {
+        setImportNotice(
+          `Imported ${googleContactsCount} contact${googleContactsCount === 1 ? "" : "s"} from Google.`
+        );
+      } else {
+        setImportNotice("Google Contacts connected.");
+      }
     } else if (googleContactsReturn === "error") {
       setImportError("Google Contacts import failed. Try again.");
     }
-  }, [googleContactsReturn, invalidateContacts]);
+  }, [googleContactsReturn, googleContactsCount, invalidateContacts]);
+
+  const displayError = importError ?? pendingImport.error;
+  const displayNotice =
+    pendingImport.notice ??
+    (googleContactsReturn === "connected"
+      ? importNotice ?? "Google Contacts connected."
+      : importNotice);
+  const isImporting = syncing || pendingImport.importing;
 
   const totalPages = listData ? Math.max(1, Math.ceil(listData.total / PAGE_SIZE)) : 1;
 
@@ -134,9 +169,7 @@ export function ContactsSettings({ googleContactsReturn }: ContactsSettingsProps
     setImportError(null);
     try {
       const result = await syncGoogleContactsApi();
-      setImportNotice(
-        `Synced ${result.imported} new contact${result.imported === 1 ? "" : "s"} (${result.total} total in Google).`
-      );
+      setImportNotice(formatGoogleContactsImportMessage(result));
       await invalidateContacts();
       void refetchGoogle();
       void refetchList();
@@ -175,10 +208,17 @@ export function ContactsSettings({ googleContactsReturn }: ContactsSettingsProps
         App contacts only — stored in Command Inbox, never written back to Google Contacts.
       </p>
 
-      {importError ? (
-        <p className="mt-2 text-xs text-[color:var(--color-destructive)]">{importError}</p>
+      {displayError ? (
+        <p className="mt-2 text-xs text-[color:var(--color-destructive)]">{displayError}</p>
       ) : null}
-      {importNotice ? <p className="mt-2 text-xs text-muted-foreground">{importNotice}</p> : null}
+      {isImporting ? (
+        <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Importing contacts from Google…
+        </p>
+      ) : displayNotice ? (
+        <p className="mt-2 text-xs text-muted-foreground">{displayNotice}</p>
+      ) : null}
 
       <div className="mt-4 rounded-md border border-border p-3">
         <div className="flex items-center justify-between gap-2">
@@ -204,8 +244,8 @@ export function ContactsSettings({ googleContactsReturn }: ContactsSettingsProps
                 : "never"}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" disabled={syncing} onClick={() => void handleSync()}>
-                {syncing ? (
+              <Button size="sm" disabled={isImporting} onClick={() => void handleSync()}>
+                {isImporting ? (
                   <>
                     <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                     Syncing…

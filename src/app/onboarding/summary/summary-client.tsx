@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, Lock, Unlock } from "lucide-react";
+import { ArrowRight, Check, Loader2, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { OnboardingContactsStatus } from "@/lib/contacts/onboarding-contacts-status";
+import { useGoogleContactsPendingImport } from "@/lib/contacts/use-google-contacts-pending-import";
 
 interface SummaryClientProps {
-  contactsStatus: "skipped" | "imported" | "gmail";
+  contactsStatus: OnboardingContactsStatus;
   contactCount: number;
+  importPending: boolean;
 }
 
 const UNLOCKED = [
@@ -23,10 +26,28 @@ const CONTACT_FEATURES = [
   "Send-time optimization per contact",
 ];
 
-export function SummaryClient({ contactsStatus, contactCount }: SummaryClientProps) {
+export function SummaryClient({
+  contactsStatus: initialStatus,
+  contactCount: initialCount,
+  importPending,
+}: SummaryClientProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [contactsStatus, setContactsStatus] = useState(initialStatus);
+  const [contactCount, setContactCount] = useState(initialCount);
+
+  const pendingImport = useGoogleContactsPendingImport(importPending, (result) => {
+    setContactsStatus("google");
+    setContactCount(result.imported);
+  });
+
+  useEffect(() => {
+    setContactsStatus(initialStatus);
+    setContactCount(initialCount);
+  }, [initialStatus, initialCount]);
+
   const hasContacts = contactsStatus !== "skipped" && contactCount > 0;
+  const isImporting = pendingImport.importing;
 
   async function finishOnboarding() {
     setSaving(true);
@@ -45,15 +66,33 @@ export function SummaryClient({ contactsStatus, contactCount }: SummaryClientPro
     }
   }
 
+  function contactsSummaryText(): string {
+    if (isImporting) {
+      return "Importing contacts from Google…";
+    }
+    if (pendingImport.error) {
+      return "Google Contacts connected, but import failed. You can retry from People in the inbox.";
+    }
+    if (hasContacts) {
+      return `${contactCount} contact${contactCount === 1 ? "" : "s"} imported.`;
+    }
+    if (contactsStatus === "google") {
+      return "Google Contacts connected. No email addresses found to import.";
+    }
+    return "You skipped contacts — you can add them later from People.";
+  }
+
   return (
     <div>
       <div className="rounded-[8px] bg-[rgba(0,102,204,0.06)] px-4 py-3">
         <p className="type-body-strong text-ink">You&apos;re ready for the inbox</p>
-        <p className="mt-1 type-caption text-ink-muted-48">
-          {hasContacts
-            ? `${contactCount} contact${contactCount === 1 ? "" : "s"} imported.`
-            : "You skipped contacts — you can add them later from People."}
+        <p className="mt-1 type-caption text-ink-muted-48 flex items-center gap-2">
+          {isImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          {contactsSummaryText()}
         </p>
+        {pendingImport.notice && !isImporting ? (
+          <p className="mt-1 type-caption text-ink-muted-48">{pendingImport.notice}</p>
+        ) : null}
       </div>
 
       <div className="mt-6 space-y-4">
@@ -65,7 +104,7 @@ export function SummaryClient({ contactsStatus, contactCount }: SummaryClientPro
         />
       </div>
 
-      {!hasContacts ? (
+      {!hasContacts && !isImporting ? (
         <p className="mt-6 type-caption text-ink-muted-48">
           Import contacts anytime from People, or scan sent mail to build your list.
         </p>
@@ -74,7 +113,7 @@ export function SummaryClient({ contactsStatus, contactCount }: SummaryClientPro
       <Button
         size="lg"
         className="mt-8 w-full"
-        disabled={saving}
+        disabled={saving || isImporting}
         onClick={() => void finishOnboarding()}
       >
         Open inbox

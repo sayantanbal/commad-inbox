@@ -33,7 +33,7 @@ function isAuthError(error: unknown): boolean {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ openSettings?: string; googleContacts?: string }>;
+  searchParams: Promise<{ openSettings?: string; googleContacts?: string; count?: string }>;
 }) {
   const { tenant, userId, userEmail } = await requireConnectedTenant();
   const params = await searchParams;
@@ -74,6 +74,9 @@ export default async function InboxPage({
         }))}
         initialOpenSettings={params.openSettings ?? null}
         googleContactsReturn={params.googleContacts ?? null}
+        googleContactsCount={
+          params.count != null ? Number(params.count) || null : null
+        }
       />
     );
   } catch (error) {

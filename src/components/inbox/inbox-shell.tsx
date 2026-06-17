@@ -139,6 +139,7 @@ interface InboxShellProps {
   initialSnoozes: Array<{ threadId: string; until: Date }>;
   initialOpenSettings?: string | null;
   googleContactsReturn?: string | null;
+  googleContactsCount?: number | null;
 }
 
 function initialLane(classifications: Classification[]): TriageLane {
@@ -167,6 +168,7 @@ export function InboxShell({
   initialSnoozes,
   initialOpenSettings,
   googleContactsReturn,
+  googleContactsCount,
 }: InboxShellProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -2564,6 +2566,7 @@ export function InboxShell({
                 aiKeysStatus={aiKeysStatus}
                 onAiKeysStatusChange={setAiKeysStatus}
                 googleContactsReturn={googleContactsReturn}
+                googleContactsCount={googleContactsCount}
               />
             </div>
           </div>

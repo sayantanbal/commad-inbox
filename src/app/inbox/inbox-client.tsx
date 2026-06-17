@@ -25,6 +25,7 @@ interface InboxClientProps {
   initialSnoozes: Array<{ threadId: string; until: string }>;
   initialOpenSettings?: string | null;
   googleContactsReturn?: string | null;
+  googleContactsCount?: number | null;
 }
 
 export function InboxClient({
@@ -36,6 +37,7 @@ export function InboxClient({
   initialSnoozes,
   initialOpenSettings,
   googleContactsReturn,
+  googleContactsCount,
 }: InboxClientProps) {
   const data = deserializeInboxData(initialData);
   return (
@@ -55,6 +57,7 @@ export function InboxClient({
         }))}
         initialOpenSettings={initialOpenSettings}
         googleContactsReturn={googleContactsReturn}
+        googleContactsCount={googleContactsCount}
       />
     </Suspense>
   );

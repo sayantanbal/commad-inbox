@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { GOOGLE_CONTACTS_STATE_COOKIE } from "@/lib/contacts/google-contacts-oauth";
 import {
+  getGoogleContactsConnectionStatus,
   markGoogleContactsSynced,
   saveGoogleContactsConnection,
 } from "@/lib/contacts/google-contacts-connection";
@@ -48,28 +49,39 @@ export async function GET(request: NextRequest) {
       await saveGoogleContactsConnection(session.user.id, tokenPayload.refresh_token);
     }
 
-    const result = await importGoogleContactsWithToken(
-      session.user.id,
-      tokenPayload.access_token
-    );
-    await markGoogleContactsSynced(session.user.id);
-
     const destination = new URL(returnTo || "/onboarding/summary", request.url);
-    if (destination.pathname === "/inbox") {
+    const connectionStatus = await getGoogleContactsConnectionStatus(session.user.id);
+
+    if (!connectionStatus.connected) {
+      const result = await importGoogleContactsWithToken(
+        session.user.id,
+        tokenPayload.access_token
+      );
+      await markGoogleContactsSynced(session.user.id);
+
+      if (destination.pathname === "/inbox") {
+        destination.searchParams.set("openSettings", "contacts");
+        destination.searchParams.set("googleContacts", "connected");
+        destination.searchParams.set("count", String(result.imported));
+      } else {
+        destination.searchParams.set("contacts", "google");
+        destination.searchParams.set("count", String(result.imported));
+      }
+    } else if (destination.pathname === "/inbox") {
       destination.searchParams.set("openSettings", "contacts");
-      destination.searchParams.set("googleContacts", "connected");
-      destination.searchParams.set("count", String(result.imported));
+      destination.searchParams.set("googleContacts", "pending");
     } else {
       destination.searchParams.set("contacts", "google");
-      destination.searchParams.set("count", String(result.imported));
+      destination.searchParams.set("import", "pending");
     }
     const response = NextResponse.redirect(destination);
     response.cookies.delete(GOOGLE_CONTACTS_STATE_COOKIE);
     return response;
-  } catch {
+  } catch (error) {
+    console.error("[google-contacts] oauth callback failed", error);
     const fallback = returnTo?.startsWith("/inbox")
       ? "/inbox?openSettings=contacts&googleContacts=error"
-      : "/onboarding/contacts?error=import_failed";
+      : "/onboarding/contacts?error=oauth_failed";
     const response = NextResponse.redirect(new URL(fallback, request.url));
     response.cookies.delete(GOOGLE_CONTACTS_STATE_COOKIE);
     return response;
