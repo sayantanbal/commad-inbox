@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../..", import.meta.url));
+const root = fileURLToPath(new URL("../../..", import.meta.url));
 const source = join(root, "public", "demo");
 const target = join(root, "apps", "docs", "public", "demo");
 
