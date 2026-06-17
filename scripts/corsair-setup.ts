@@ -4,9 +4,16 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 async function main() {
-  const { corsair } = await import("../src/lib/corsair");
-  const { env } = await import("../src/lib/env");
+  const { corsair, getAppUrlFromEnv } = await import("./lib/corsair-for-scripts");
   const { setupCorsair } = await import("corsair/setup");
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required");
+  }
+
+  const redirectUrl = `${getAppUrlFromEnv()}/api/auth/callback/corsair`;
 
   console.log("Running Corsair setup (integration credentials + plugin rows)…\n");
 
@@ -14,14 +21,14 @@ async function main() {
     caller: "script",
     credentials: {
       gmail: {
-        client_id: env.GOOGLE_CLIENT_ID,
-        client_secret: env.GOOGLE_CLIENT_SECRET,
-        redirect_url: `${env.APP_URL ?? env.BETTER_AUTH_URL}/api/auth/callback/corsair`,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_url: redirectUrl,
       },
       googlecalendar: {
-        client_id: env.GOOGLE_CLIENT_ID,
-        client_secret: env.GOOGLE_CLIENT_SECRET,
-        redirect_url: `${env.APP_URL ?? env.BETTER_AUTH_URL}/api/auth/callback/corsair`,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_url: redirectUrl,
       },
     },
   });
@@ -30,9 +37,10 @@ async function main() {
     console.log(output);
   }
 
-  if (env.GMAIL_PUBSUB_TOPIC) {
-    await corsair.keys.gmail.set_topic_id(env.GMAIL_PUBSUB_TOPIC);
-    console.log(`\n✓ Gmail Pub/Sub topic: ${env.GMAIL_PUBSUB_TOPIC}`);
+  const pubsubTopic = process.env.GMAIL_PUBSUB_TOPIC;
+  if (pubsubTopic) {
+    await corsair.keys.gmail.set_topic_id(pubsubTopic);
+    console.log(`\n✓ Gmail Pub/Sub topic: ${pubsubTopic}`);
   } else {
     console.log(
       "\n○ GMAIL_PUBSUB_TOPIC not set — Gmail push webhooks need a Pub/Sub topic (see docs/phase2-webhooks.md)"
