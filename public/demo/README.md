@@ -4,6 +4,8 @@ Record and drop files here before hackathon submission. Paths referenced by the 
 
 ## Required files
 
+Placeholder 1×1 PNGs are committed so docs and app builds succeed before you record real captures. Replace them with production screenshots when ready.
+
 | File | Size | Purpose |
 |------|------|---------|
 | `hero.gif` | ≤ 90s loop | Docs homepage + README hero — show `M` meeting flow end-to-end |

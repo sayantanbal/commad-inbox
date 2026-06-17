@@ -8,6 +8,9 @@ out/
 # Fumadocs generated
 .source/
 
+# Synced from ../../public/demo (see scripts/sync-demo-assets.mjs)
+public/
+
 # Env
 .env*.local
 

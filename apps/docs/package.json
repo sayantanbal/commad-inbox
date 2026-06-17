@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "node scripts/sync-demo-assets.mjs && next dev --port 3001",
+    "prebuild": "node scripts/sync-demo-assets.mjs",
     "build": "next build",
     "start": "next start --port 3001",
     "postinstall": "fumadocs-mdx"
