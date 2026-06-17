@@ -97,8 +97,43 @@ function loadEnv(): Env {
 
 export const env = loadEnv();
 
-export function getAppUrl(): string {
-  return env.APP_URL ?? env.BETTER_AUTH_URL;
+function originFromRequestInput(
+  request: Request | URL | string
+): string {
+  if (typeof request === "string") {
+    return new URL(request).origin;
+  }
+  if (request instanceof URL) {
+    return request.origin;
+  }
+  return new URL(request.url).origin;
+}
+
+function isLocalDevOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Public origin for OAuth redirects and webhooks.
+ * In local dev, prefer the browser origin when you're on localhost so
+ * APP_URL can stay set to ngrok for webhook scripts without breaking OAuth.
+ */
+export function getAppUrl(request?: Request | URL | string): string {
+  const configured = env.APP_URL ?? env.BETTER_AUTH_URL;
+
+  if (env.NODE_ENV === "development" && request) {
+    const origin = originFromRequestInput(request);
+    if (isLocalDevOrigin(origin)) {
+      return origin;
+    }
+  }
+
+  return configured;
 }
 
 /** Vars required before enabling sign-in (Phase 1). */

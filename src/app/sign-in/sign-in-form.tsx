@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
-export function SignInForm() {
+export function SignInForm({ reason }: { reason?: string | null }) {
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
 
@@ -30,6 +30,12 @@ export function SignInForm() {
         Connect your Google account to load real Gmail threads and calendar
         events.
       </p>
+
+      {reason === "session_expired" ? (
+        <p className="mt-5 rounded-[8px] border border-[color:var(--color-warning)]/30 bg-[#fff7e6] px-4 py-3 type-caption text-[color:var(--color-warning)]">
+          Your session expired. Sign in again to continue.
+        </p>
+      ) : null}
 
       <Button size="lg" className="mt-8 w-full" onClick={handleGoogleSignIn}>
         Continue with Google

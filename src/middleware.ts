@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 const PROTECTED_PREFIXES = ["/inbox", "/onboarding"];
-const AUTH_PAGES = ["/sign-in"];
 
 function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(
@@ -21,9 +20,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
-  if (AUTH_PAGES.includes(pathname) && isAuthenticated) {
-    return NextResponse.redirect(new URL("/onboarding/connect", request.url));
-  }
+  // Do not redirect /sign-in → /onboarding/connect from cookie presence alone.
+  // A stale session cookie + failed getSession() caused an infinite redirect loop.
 
   return NextResponse.next();
 }

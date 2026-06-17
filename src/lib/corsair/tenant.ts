@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { corsair } from "@/lib/corsair";
-import { isTenantFullyConnected } from "@/lib/corsair/connection";
+import { isTenantFullyConnected, getConnectedPlugins } from "@/lib/corsair/connection";
 
 export async function requireSession() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -17,7 +17,12 @@ export async function requireConnectedTenant() {
   const session = await requireSession();
   const connected = await isTenantFullyConnected(session.user.id);
   if (!connected) {
-    redirect("/onboarding/connect");
+    const plugins = await getConnectedPlugins(session.user.id);
+    redirect(
+      plugins.size > 0
+        ? "/onboarding/connect?reconnect=1"
+        : "/onboarding/connect"
+    );
   }
   return {
     session,

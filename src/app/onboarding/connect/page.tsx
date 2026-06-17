@@ -18,16 +18,19 @@ interface ConnectPageProps {
 export default async function ConnectPage({ searchParams }: ConnectPageProps) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
-    redirect("/sign-in");
-  }
-
-  if (await isTenantFullyConnected(session.user.id)) {
-    redirect(await getOnboardingRedirectPath(session.user.id));
+    redirect("/sign-in?reason=session_expired");
   }
 
   const params = await searchParams;
   const showReconnect = params.reconnect === "1";
   const error = params.error;
+  const stayOnConnect = showReconnect || Boolean(error);
+
+  if (await isTenantFullyConnected(session.user.id)) {
+    if (!stayOnConnect) {
+      redirect(await getOnboardingRedirectPath(session.user.id));
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-parchment">

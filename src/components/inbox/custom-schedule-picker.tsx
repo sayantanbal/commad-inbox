@@ -20,6 +20,20 @@ function toDatetimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function defaultSlotValue(): string {
+  const d = new Date(Date.now() + 3_600_000);
+  d.setSeconds(0, 0);
+  d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0);
+  return toDatetimeLocalValue(d);
+}
+
+function formatCustomPreview(value: string): string {
+  if (!value) return "a custom time";
+  const slot = new Date(value);
+  if (Number.isNaN(slot.getTime())) return "a custom time";
+  return format(slot, "EEE, MMM d · h:mm a");
+}
+
 export function CustomSchedulePicker({
   open,
   onOpenChange,
@@ -27,15 +41,12 @@ export function CustomSchedulePicker({
   title = "Pick a custom time",
   onSelect,
 }: CustomSchedulePickerProps) {
-  const [customValue, setCustomValue] = useState("");
+  const [customValue, setCustomValue] = useState(defaultSlotValue);
   const [customError, setCustomError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    const d = new Date(Date.now() + 3_600_000);
-    d.setSeconds(0, 0);
-    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0);
-    setCustomValue(toDatetimeLocalValue(d));
+    setCustomValue(defaultSlotValue());
     setCustomError(null);
   }, [open]);
 
@@ -81,7 +92,7 @@ export function CustomSchedulePicker({
             <p className="type-caption text-[color:var(--color-destructive)]">{customError}</p>
           )}
           <Button className="w-full" onClick={applyCustom}>
-            Use {format(new Date(customValue), "EEE, MMM d · h:mm a")}
+            Use {formatCustomPreview(customValue)}
           </Button>
         </div>
       </DialogContent>

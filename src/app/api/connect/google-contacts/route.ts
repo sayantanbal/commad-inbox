@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/onboarding/connect", request.url));
   }
 
-  const appUrl = getAppUrl();
+  const appUrl = getAppUrl(request);
   const redirectUri = `${appUrl}/api/auth/callback/google-contacts`;
   const state = randomBytes(24).toString("hex");
   const returnTo = request.nextUrl.searchParams.get("returnTo") ?? "/onboarding/summary?contacts=google";

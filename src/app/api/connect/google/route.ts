@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    return await startPluginOAuth(session.user.id, "gmail");
+    return await startPluginOAuth(session.user.id, "gmail", request);
   } catch (error) {
     if (isKekMismatchError(error)) {
       return NextResponse.redirect(

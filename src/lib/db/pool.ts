@@ -17,10 +17,6 @@ if (process.env.VERCEL) {
   attachDatabasePool(pgPool);
 }
 
-pgPool.on("connect", (client) => {
-  void client.query("SET statement_timeout = '30s'");
-});
-
 if (process.env.NODE_ENV !== "production") {
   globalForPool.pgPool = pgPool;
 }

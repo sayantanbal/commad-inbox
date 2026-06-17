@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const redirectUri = getCorsairRedirectUri();
+  const redirectUri = getCorsairRedirectUri(request);
 
   try {
     const result = await processOAuthCallback(corsair, {
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     if (result.plugin === "gmail") {
       const calendarConnected = await isPluginConnected(result.tenantId, "googlecalendar");
       if (!calendarConnected) {
-        return startPluginOAuth(result.tenantId, "googlecalendar");
+        return startPluginOAuth(result.tenantId, "googlecalendar", request);
       }
     }
 

@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const appUrl = getAppUrl();
+  const appUrl = getAppUrl(request);
   const redirectUri = `${appUrl}/api/auth/callback/google-contacts`;
 
   try {
