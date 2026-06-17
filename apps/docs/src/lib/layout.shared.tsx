@@ -14,7 +14,7 @@ export function baseOptions(): BaseLayoutProps {
       },
       {
         text: "GitHub",
-        url: "https://github.com/sayantanbal/command-inbox",
+        url: "https://github.com/sayantanbal/commad-inbox",
         external: true,
       },
     ],

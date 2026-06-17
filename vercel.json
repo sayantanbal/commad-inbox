@@ -6,10 +6,6 @@
   "regions": ["iad1"],
   "crons": [
     {
-      "path": "/api/cron/process-due",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/cron/renew-watches",
       "schedule": "0 4 * * *"
     },
