@@ -61,6 +61,10 @@ const envSchema = z.object({
   PUSHER_CLUSTER: optionalNonEmpty(),
 
   CRON_SECRET: optionalNonEmpty(),
+
+  /** Upstash Redis REST — distributed rate limiting (optional locally; recommended in prod) */
+  UPSTASH_REDIS_REST_URL: optionalNonEmpty(),
+  UPSTASH_REDIS_REST_TOKEN: optionalNonEmpty(),
 });
 
 export type Env = z.infer<typeof envSchema>;

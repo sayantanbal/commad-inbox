@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const rateLimited = enforceUserRateLimit(auth.userId, "agent-chat");
+  const rateLimited = await enforceUserRateLimit(request, auth.userId, "agent-chat");
   if (rateLimited) return rateLimited;
 
   try {

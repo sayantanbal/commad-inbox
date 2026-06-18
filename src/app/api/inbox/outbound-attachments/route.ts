@@ -26,7 +26,11 @@ export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const rateLimited = enforceUserRateLimit(auth.userId, "outbound-attachment");
+  const rateLimited = await enforceUserRateLimit(
+    request,
+    auth.userId,
+    "outbound-attachment"
+  );
   if (rateLimited) return rateLimited;
 
   const formData = await request.formData();

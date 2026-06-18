@@ -9,11 +9,11 @@ const baseUrl = (
 
 type Step = { name: string; run: () => Promise<void> };
 
-async function fetchOk(path: string, expectStatus = 200): Promise<Response> {
-  const url = `${baseUrl}${path}`;
+async function fetchOk(pathOrUrl: string, expectStatus = 200): Promise<Response> {
+  const url = pathOrUrl.startsWith("http") ? pathOrUrl : `${baseUrl}${pathOrUrl}`;
   const response = await fetch(url, { redirect: "follow" });
   if (response.status !== expectStatus) {
-    throw new Error(`${path} returned ${response.status}, expected ${expectStatus}`);
+    throw new Error(`${pathOrUrl} returned ${response.status}, expected ${expectStatus}`);
   }
   return response;
 }

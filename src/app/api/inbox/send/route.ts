@@ -7,15 +7,15 @@ import { scheduledSendIdBodySchema, sendBodySchema } from "@/lib/schemas/api";
 
 const UNDO_WINDOW_MS = 5000;
 
-function checkSendRateLimit(userId: string) {
-  return enforceUserRateLimit(userId, "inbox-send");
+function checkSendRateLimit(request: Request, userId: string) {
+  return enforceUserRateLimit(request, userId, "inbox-send");
 }
 
 export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const rateLimited = checkSendRateLimit(auth.userId);
+  const rateLimited = await checkSendRateLimit(request, auth.userId);
   if (rateLimited) return rateLimited;
 
   const parsed = await parseJsonBody(request, sendBodySchema);
@@ -45,7 +45,7 @@ export async function PUT(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const rateLimited = checkSendRateLimit(auth.userId);
+  const rateLimited = await checkSendRateLimit(request, auth.userId);
   if (rateLimited) return rateLimited;
 
   const parsed = await parseJsonBody(request, scheduledSendIdBodySchema);

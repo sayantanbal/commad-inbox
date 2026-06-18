@@ -1,8 +1,31 @@
 # Corsair features used — judge evidence
 
 **Project:** Command Inbox  
-**Updated:** 2026-06-17  
+**Updated:** 2026-06-18  
 **Purpose:** param-1 rubric — feature → code → demo beat
+
+## Webhook architecture (dual entry, one handler)
+
+Google requires two HTTP endpoints; both call `handleCalendarEventChanged` in `src/lib/webhooks/calendar-event.ts`.
+
+```mermaid
+flowchart LR
+  PubSub[Gmail Pub/Sub] --> CorsairWH["POST /api/webhooks processWebhook"]
+  CorsairWH --> GmailHandler[handleGmailMessageChanged]
+  CorsairCal[Corsair googlecalendar.eventChanged] --> SharedHandler[handleCalendarEventChanged]
+  GoogleWatch[Google events.watch] --> CalRoute["POST /api/webhooks/calendar verify channel"]
+  CalRoute --> SharedHandler
+  SharedHandler --> Pusher[Pusher calendar-updated]
+```
+
+| Entry | Route | Trigger |
+|-------|-------|---------|
+| Corsair SDK | `/api/webhooks?tenantId=…` | `processWebhook` → `gmail.messageChanged` or `googlecalendar.eventChanged` |
+| Google Calendar watch | `/api/webhooks/calendar?tenantId=…` | `X-Goog-*` headers after channel-token verify |
+
+Routing helpers (tested): `src/lib/webhooks/calendar-webhook-routing.ts`
+
+## Feature map
 
 | Feature | Evidence (file) | Demo moment |
 |---------|-----------------|-------------|

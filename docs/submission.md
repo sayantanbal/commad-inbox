@@ -56,9 +56,9 @@ bun run smoke:corsair      # optional — needs DATABASE_URL + OAuth tenant
 
 Agent eval set: [`evaluations/inbox-agent.xml`](../evaluations/inbox-agent.xml) (10 read-only Q&amp;A pairs; validated against `evaluations/fixtures/`).
 
-### Deploy day (evening before record)
+Full Phase 1–6 ops sequence: **[phase1-6-ops-runbook.md](./phase1-6-ops-runbook.md)** · `bun run phase1-6:preflight`
 
-See **[deploy-evening-checklist.md](./deploy-evening-checklist.md)** for the full step-by-step list.
+Agent prompt: [agent-rehearsal-prompt.txt](./agent-rehearsal-prompt.txt) · Seed emails: [demo-seed-emails.md](./demo-seed-emails.md)
 
 1. Deploy `main` to production (`command-inbox.sayantanbal.in`)
 2. Set `APP_URL` to production HTTPS on host

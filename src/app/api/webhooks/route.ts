@@ -2,6 +2,7 @@ import { processWebhook } from "corsair";
 import { corsair } from "@/lib/corsair";
 import { handleGmailMessageChanged } from "@/lib/webhooks/gmail-event";
 import { handleCalendarEventChanged } from "@/lib/webhooks/calendar-event";
+import { shouldHandleCorsairCalendarEvent } from "@/lib/webhooks/calendar-webhook-routing";
 import { logWebhookAttempt } from "@/lib/webhooks/log";
 import { webhookTenantIdSchema } from "@/lib/schemas/webhooks";
 
@@ -15,6 +16,11 @@ function headersRecord(request: Request): Record<string, string> {
   return out;
 }
 
+/**
+ * Gmail + Calendar via Corsair `processWebhook`.
+ * Gmail push (Pub/Sub) → messageChanged → classify.
+ * Calendar plugin events → eventChanged → handleCalendarEventChanged (shared with /api/webhooks/calendar).
+ */
 export async function POST(request: Request) {
   const tenantIdParam = new URL(request.url).searchParams.get("tenantId");
   const tenantParsed = webhookTenantIdSchema.safeParse(tenantIdParam);
@@ -61,7 +67,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (result.plugin === "googlecalendar" && result.action === "eventChanged") {
+    if (shouldHandleCorsairCalendarEvent(result.plugin, result.action)) {
       void handleCalendarEventChanged(tenantId).catch((error) => {
         console.error("[webhook] calendar sync failed", error);
       });

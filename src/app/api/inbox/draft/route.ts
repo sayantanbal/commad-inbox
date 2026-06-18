@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const auth = await requireSessionApi();
   if ("error" in auth) return auth.error;
 
-  const rateLimited = enforceUserRateLimit(auth.userId, "inbox-draft");
+  const rateLimited = await enforceUserRateLimit(request, auth.userId, "inbox-draft");
   if (rateLimited) return rateLimited;
 
   try {
