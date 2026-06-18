@@ -9,7 +9,7 @@ Last updated: **2026-06-16** (98+ plan Phase 0–4 code complete; Phase 5 ship p
 |---|---|
 | **Overall stage** | **98+ plan Phase 0–4 done**; Phase 5 (deploy, video, social) outstanding |
 | **Code** | Full INBOX index, API rate limits, calendar webhook auth, `google-proxy.ts`, agent/M-key pipeline |
-| **Blockers to submit** | Demo video, deploy verify, social posts, judge OAuth test users |
+| **Blockers to submit** | Deploy verify, judge OAuth publish (optional test users), manual prod smoke |
 | **Tests** | **30** unit/smoke tests passing (`bun test src/lib/__tests__`) |
 | **Migrations** | Run `bun run db:migrate` for `0012_full_inbox_index`, `0013_calendar_watch_channel` |
 
@@ -35,7 +35,7 @@ Last updated: **2026-06-16** (98+ plan Phase 0–4 code complete; Phase 5 ship p
 | **3 — Hero workflow** | `M` → availability → invite + draft | ✅ Done | Manual fallback when intent confidence &lt; 0.5 |
 | **4 — Palette + shortcuts** | `Mod+K`, registry, cheat sheet, PWA/touch | ✅ Done | `react-hotkeys-hook`, swipe rows, mobile tabs |
 | **5 — MCP agent** | Chat panel, approval flow, example prompt | ✅ Done | `/api/agent/chat`, `AgentToolApproval` |
-| **6 — Ship** | Advanced search, deploy, README, demo video | 🟡 Partial | Docs/README/deploy ready; **video + posts not shipped** |
+| **6 — Ship** | Advanced search, deploy, README, demo video | 🟡 Partial | Demo videos shipped; deploy verify / OAuth publish may remain |
 
 Legend: ✅ Done · 🟡 Partial · ☐ Not started
 
@@ -178,7 +178,7 @@ Legend: ✅ Done · 🟡 Partial · ☐ Not started
 | Judge OAuth checklist | ✅ | [judge-oauth.md](./judge-oauth.md) |
 | Submission checklist | ✅ | [submission.md](./submission.md) |
 | Demo video script | ✅ | [demo-script.md](./demo-script.md) |
-| **Demo video recorded & uploaded** | ☐ | URL placeholder in submission.md |
+| **Demo video recorded & uploaded** | ✅ | https://youtu.be/zDPY7aWe970 · OAuth https://youtu.be/ctJsPyg0UBA |
 | **Live production smoke test signed off** | 🟡 | URL listed; checklist box unchecked |
 | **X + LinkedIn posts published** | ☐ | Draft only in social-post.md |
 

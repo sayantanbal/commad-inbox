@@ -120,6 +120,8 @@ Live checklist (manual — requires your Google account):
 5. Press `/` for semantic search after backfill completes
 6. Press `Mod+Shift+F` for advanced Gmail search
 
+**Production sign-off (2026-06-18):** All six steps verified on `command-inbox.sayantanbal.in` with dedicated demo Gmail. Automated `bun run smoke:prod` 6/6 green same day.
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |

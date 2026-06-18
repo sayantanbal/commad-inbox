@@ -8,7 +8,8 @@ Use this when submitting **Command Center Builder** (MacBook Giveaway Hackathon)
 |------|--------|------|
 | Open-source GitHub repo | ✅ | https://github.com/sayantanbal/commad-inbox |
 | Live deployed app | ✅ | https://command-inbox.sayantanbal.in |
-| Demo video (YC-style, ~90s) | ☐ | _in progress — add YouTube/Loom URL_ |
+| Demo video (YC-style, ~90s) | ✅ | https://youtu.be/zDPY7aWe970 |
+| OAuth data-access demo (GCP verification) | ✅ | https://youtu.be/ctJsPyg0UBA |
 | X/Twitter post | ✅ | https://x.com/sayantan_bal/status/2065756194409713738 |
 | LinkedIn post | ✅ | https://www.linkedin.com/posts/sayantanbal_github-sayantanbalcommad-inbox-activity-7473281073972420608-U5-m |
 | Short README | ✅ | [README.md](../README.md) |
@@ -39,9 +40,7 @@ Copy from [social-post.md](./social-post.md). Tag **ChaiCode**, **Hitesh Sir**, 
 
 Hashtags: `#chaicode` `#corsair-dev`
 
-## Judge OAuth
-
-Publish OAuth to **Production** (any Gmail) or add judge emails as **Test users** — see [judge-oauth.md](./judge-oauth.md).
+| Judge OAuth | ✅ Published 2026-06-18 (verification pending) | [judge-oauth.md](./judge-oauth.md) |
 
 ## Pre-submit smoke test
 
@@ -79,3 +78,14 @@ Live checklist (see [deploy.md](./deploy.md#6-post-deploy-smoke-test)):
 4. Agent: send calendar invite + email (approve previews)
 5. `/` semantic search, `Mod+Shift+F` advanced search
 6. Send yourself email → lane updates within ~30s
+
+## Submission sign-off
+
+| Item | Status | Date |
+|------|--------|------|
+| Hackathon form submitted | ✅ | 2026-06-18 |
+| Evaluator guide in form comments | ✅ | https://docs.command-inbox.sayantanbal.in/docs/overview/evaluator-guide |
+| Manual prod smoke (deploy.md §6) | ✅ | 2026-06-18 |
+| OAuth published to Production | ✅ | 2026-06-18 (Google verification pending) |
+| `bun run smoke:prod` 6/6 | ✅ | 2026-06-18 |
+| `bun run smoke:submission` | ✅ | 2026-06-18 |

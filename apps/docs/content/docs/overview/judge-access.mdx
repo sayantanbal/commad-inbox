@@ -1,42 +1,45 @@
 ---
 title: Judge access
-description: Google OAuth test users and demo account setup for reviewers
+description: Google OAuth sign-in for hackathon judges and reviewers
 ---
 
-Command Inbox uses a Google Cloud OAuth app in **Testing** mode. Only emails listed as **Test users** can sign in until the app is published.
+Command Inbox OAuth is **published to Production** (2026-06-18). Any Google account can sign in at [command-inbox.sayantanbal.in](https://command-inbox.sayantanbal.in).
 
-## Request OAuth access (judges)
+## Sign in (recommended path)
 
-We do **not** publish shared demo credentials. To evaluate with your own Gmail:
+1. Open [command-inbox.sayantanbal.in](https://command-inbox.sayantanbal.in) → **Sign in with Google**.
+2. If Google shows an **unverified app** warning, click **Advanced** → **Go to Command Inbox (unsafe)** — expected until Google completes OAuth verification (submitted; pending approval).
+3. Connect **Gmail + Calendar** on onboarding (or click **Skip to inbox** on the working-days step).
+4. Follow the [Evaluator guide](/docs/overview/evaluator-guide) — 5-minute walkthrough on **your own** inbox.
 
-1. Open a [GitHub issue](https://github.com/sayantanbal/commad-inbox/issues/new?template=judge-access.md) (or email the maintainer listed in the repo README) with:
-   - Your **Gmail address** (the one you will sign in with)
-   - Your name / handle (optional)
-2. Wait for confirmation that your email was added to Google OAuth **Test users** (~24h during hackathon review).
-3. Follow the [Evaluator guide](/docs/overview/evaluator-guide) — connect Google on production, then run the 5-minute script.
+We do **not** publish shared demo passwords. Every judge uses their own Gmail.
 
-Until your email is on the test-user list, Google shows **Access blocked** — this is expected.
+## Plan B — Testing mode + test users
+
+If Production sign-in fails unexpectedly:
+
+1. Open a [GitHub issue](https://github.com/sayantanbal/commad-inbox/issues/new?template=judge-access.md) with your **Gmail address**.
+2. Wait for confirmation your email was added to OAuth **Test users** in Google Cloud Console.
+3. Retry sign-in.
+
+Until your email is on the test-user list (Testing mode only), Google shows **Access blocked**.
+
+## Agent demo without real contacts
+
+The agent demo uses a synthetic contact — no email required:
+
+1. During onboarding, click **Load demo contacts** (or import in Settings → Contacts).
+2. This adds **`friend@corsair.dev`** for calendar invite demos.
+3. In the Agent panel, try: *"Send a calendar invite to friend@corsair.dev at 9 AM next Thursday and email them to confirm."*
+4. Approve **`create_calendar_invite`** and **`send_email`** when prompted — nothing sends without your click.
+
+See also: [Evaluator guide § Agent](/docs/overview/evaluator-guide#4-agent-with-approvals-60s) · [Agent chat](/docs/user-guide/agent-chat).
 
 ## Before the demo
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **OAuth consent screen**.
-2. Under **Test users**, add every judge and reviewer email.
-3. Confirm **Gmail API** and **Google Calendar API** are enabled for the project.
-4. Confirm redirect URIs include your production URLs (see [Deploy production](/docs/developer-guide/deploy-production)).
-
-## Test users
-
-Google OAuth **Testing** mode blocks sign-in for any account not on the allowlist. Judges may use **any** Gmail they choose — add each address in Cloud Console before they try to sign in.
-
-There is no app-side email hard lock; the only gate is Google's test-user list.
-
-```
-# Add each judge/reviewer Gmail before they connect:
-judge@example.com
-you@gmail.com
-# Demo account (pre-index before recording):
-demo@yourdomain.com
-```
+1. Use a desktop browser (Chrome or Edge recommended).
+2. Prefer a **fully indexed** inbox for semantic search (`/`) — fresh accounts still get the last 50 threads classified immediately; background indexing continues with a progress banner.
+3. Optional: send yourself a scheduling email from another account to populate the **Schedule** lane before trying **`M`**.
 
 ## Scopes requested
 
@@ -47,26 +50,29 @@ demo@yourdomain.com
 
 ## If a judge sees "Access blocked"
 
-- Their email is not in **Test users** — add it and wait ~1 minute.
-- They signed in with a different Google account than the one you added.
-- Production `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` do not match the OAuth app where test users were added.
+- OAuth app reverted to **Testing** and their email is not on **Test users** — open a [judge-access issue](https://github.com/sayantanbal/commad-inbox/issues/new?template=judge-access.md).
+- They signed in with a different Google account than the one added.
+- Production `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` do not match the OAuth app in GCP.
+
+## If a judge sees "unverified app"
+
+Expected while Google verification is pending. Click **Advanced** → continue. The app is published; verification removes the warning (2–12+ weeks for Gmail scopes).
 
 ## Demo account tips
 
 - Use a real inbox with a few scheduling threads in the **Schedule** lane for the `M` hero flow.
-- Send yourself a test email 30s before recording to show webhook → lane update live.
-- Keep at least one AI provider key (`OPENAI_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY`) funded for agent chat.
+- Send yourself a test email 30s before a live demo to show webhook → lane update.
+- Keep at least one AI provider key funded on the server (`GOOGLE_GENERATIVE_AI_API_KEY` or `OPENAI_API_KEY`) or add your own key under Settings → AI.
 
-### Pre-indexed demo account (recommended for video)
+### Pre-indexed inbox (recommended)
 
-For hackathon recording and judge demos, use a **dedicated Google account** that is fully indexed before going live:
+For the best semantic search (`/`) experience:
 
-1. Sign in to Command Inbox with the demo account and connect Google.
+1. Sign in and connect Google.
 2. Wait until the activity bar shows indexing complete (no “Indexing N more threads…” banner).
-3. Confirm semantic search (`/`) returns results across a large thread count.
-4. Use this same account in the demo video — do not connect a fresh empty inbox on camera.
+3. Confirm `/` returns results for phrases in your mail.
 
-Fresh connects still work: the **last 50 threads** get lanes immediately, then older mail indexes in the background with a progress banner.
+Fresh connects still work: the **last 50 threads** get lanes immediately; older mail indexes in the background.
 
 ### Calendar webhook security
 
@@ -83,3 +89,8 @@ bun scripts/renew-watches.ts
 **Production:** set `APP_URL` to your Vercel domain, then reload `/inbox` once or run `bun scripts/renew-watches.ts`.
 
 Until renewal succeeds on HTTPS, calendar webhooks return `503 Calendar watch not configured`.
+
+## Links
+
+- [Evaluator guide](/docs/overview/evaluator-guide)
+- [Judge OAuth (repo)](/docs/overview/judge-access) — repo `docs/judge-oauth.md` for GCP publish + verification details

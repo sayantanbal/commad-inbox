@@ -55,4 +55,5 @@ Builder Mode On | MacBook Giveaway Hackathon
 |----------|-----|
 | LinkedIn | https://www.linkedin.com/posts/sayantanbal_github-sayantanbalcommad-inbox-activity-7473281073972420608-U5-m |
 | X | https://x.com/sayantan_bal/status/2065756194409713738 |
-| Demo video | _pending_ |
+| Demo video | https://youtu.be/zDPY7aWe970 |
+| OAuth data-access demo (GCP) | https://youtu.be/ctJsPyg0UBA |

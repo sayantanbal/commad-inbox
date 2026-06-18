@@ -185,7 +185,9 @@ Quick checklist:
 
 ## Google OAuth (judges)
 
-Publish the OAuth app to **Production** so any Gmail can sign in (recommended for hackathon judges). While in **Testing** mode, add judge emails as test users instead. See **[docs/judge-oauth.md](docs/judge-oauth.md)** for both paths.
+The OAuth app is **published to Production** (2026-06-18). Sign in with **any Google account** at [command-inbox.sayantanbal.in](https://command-inbox.sayantanbal.in). Google OAuth verification is **submitted and pending** — judges may see an **unverified app** warning; click **Advanced** → continue.
+
+While in **Testing** mode (Plan B), add judge emails as test users instead. See **[docs/judge-oauth.md](docs/judge-oauth.md)** and the [Evaluator guide](https://docs.command-inbox.sayantanbal.in/docs/overview/judge-access).
 
 ## Hackathon submission
 
@@ -200,11 +202,13 @@ Full checklist: **[docs/submission.md](docs/submission.md)**
 |-------------|------|
 | GitHub | https://github.com/sayantanbal/commad-inbox |
 | Live app | https://command-inbox.sayantanbal.in |
-| Demo video | _in progress — add URL before submit_ |
+| Demo video | https://youtu.be/zDPY7aWe970 |
 | X post | https://x.com/sayantan_bal/status/2065756194409713738 |
 | LinkedIn post | https://www.linkedin.com/posts/sayantanbal_github-sayantanbalcommad-inbox-activity-7473281073972420608-U5-m |
 
 ## Demo video
+
+**Watch:** https://youtu.be/zDPY7aWe970 (YC-style ~90s product walkthrough)
 
 Script with timestamps: **[docs/demo-script.md](docs/demo-script.md)**
 

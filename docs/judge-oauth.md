@@ -71,8 +71,9 @@ After publishing, click **Prepare for verification** / **Submit for verification
 | Homepage / app URL | ✅ `https://command-inbox.sayantanbal.in` |
 | Authorized domains | Confirm `sayantanbal.in` in GCP |
 | Scope justification | Explain Gmail read/send + Calendar read/write for triage, `M` invites, agent |
-| Demo video | ⏳ Record today — **reuse for Google verification submission** |
-| OAuth flow in video | Must show consent screen → connect → feature using each scope |
+| Demo video (product) | ✅ https://youtu.be/zDPY7aWe970 |
+| OAuth data-access demo (submitted to GCP) | ✅ https://youtu.be/ctJsPyg0UBA |
+| OAuth flow in video | Consent screen → connect → feature using each scope (see data-access video) |
 
 Official flow: [Submitting your app for verification](https://support.google.com/cloud/answer/13461325) · [Production readiness overview](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview)
 
@@ -95,6 +96,8 @@ Official flow: [Submitting your app for verification](https://support.google.com
 | **C. Verified** | Weeks from now | Clean consent — too slow for today |
 
 **Recommended today:** **Publish now** → submit verification with demo video → in README say *“Sign in with any Google account; you may see an unverified-app warning — click Advanced to continue.”* Optionally ask ChaiCode for judge emails as **Plan B** (add to test users if publish breaks).
+
+**Status (2026-06-18):** App **published to Production**. Google OAuth **verification submitted** (pending approval). Judges sign in with any Gmail; unverified-app warning expected until Google approves.
 
 ### 7-day token expiry (Testing mode)
 
