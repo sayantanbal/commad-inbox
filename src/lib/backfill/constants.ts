@@ -1,6 +1,9 @@
 /** Recent threads classified first so lanes work immediately on connect. */
 export const QUICK_BACKFILL_LIMIT = 50;
 
+/** Threads shown in inbox list / API fetch (decoupled from quick backfill). */
+export const INBOX_LIST_LIMIT = 150;
+
 /** @deprecated Use QUICK_BACKFILL_LIMIT */
 export const BACKFILL_THREAD_LIMIT = QUICK_BACKFILL_LIMIT;
 

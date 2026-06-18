@@ -5,9 +5,38 @@ description: Five-minute walkthrough for hackathon judges and reviewers
 
 ## Before you sign in
 
-1. **Request OAuth access** — add your Gmail to the Google OAuth **Test users** list. See [Judge access](/docs/overview/judge-access#request-oauth-access-judges) (open a GitHub issue with your Gmail; no shared passwords).
+1. **Sign in** at [command-inbox.sayantanbal.in](https://command-inbox.sayantanbal.in) with **any Google account** once OAuth is published to Production. If the app is still in Testing mode, request access via [Judge access](/docs/overview/judge-access#request-oauth-access-judges).
 2. Use a desktop browser first (Chrome or Edge). Mobile works — open the **menu** (☰) for Sent, Snoozed, and Archive.
-3. Prefer a **fully indexed** inbox for semantic search (`/`) — fresh accounts still get the last 50 threads classified immediately.
+3. **Fast path:** on the first onboarding screen (“When do you work?”), click **Skip to inbox** to use default 9–5 weekdays and jump straight to triage.
+4. Prefer a **fully indexed** inbox for semantic search (`/`) — fresh accounts still get the last 50 threads classified immediately.
+
+## Architecture (Corsair spine)
+
+```mermaid
+flowchart LR
+  subgraph corsair [Corsair SDK]
+    plugins[Gmail + Calendar plugins]
+    webhooks[Gmail processWebhook]
+    mcp[MCP discovery]
+  end
+  subgraph app [Command Inbox]
+    ui[Inbox UI]
+    agent[Approval-gated agent]
+    vectors[pgvector search]
+  end
+  plugins --> ui
+  webhooks --> ui
+  mcp --> agent
+  agent --> plugins
+  ui --> vectors
+```
+
+- **Gmail push** → Pub/Sub → `/api/webhooks` → Corsair `processWebhook` → AI lanes + Pusher
+- **Calendar push** → `/api/webhooks/calendar` with channel-token verification
+- **Reads/writes** → `tenant.gmail.api.*` / `tenant.googlecalendar.api.*` (Corsair-issued tokens)
+- **google-proxy** — watches, attachments, attendee freeBusy where the SDK has no surface (still Corsair tokens, not raw OAuth in app code)
+- **Agent** — MCP `list_operations` / `get_schema` for discovery; **typed tools** with approval for sends and invites (`run_script` intentionally disabled)
+- **Cursor** — same tools via `bun mcp-server.ts` in the repo root
 
 ## 5-minute demo script
 
@@ -16,7 +45,7 @@ description: Five-minute walkthrough for hackathon judges and reviewers
 - Open **Inbox** → note **Reply / Schedule / FYI** lane tabs.
 - Press **`j`** / **`k`** to move between threads.
 - Press **`e`** to archive — watch the **undo toast** (5 seconds).
-- Press **`/`** for semantic search over indexed mail.
+- Press **`/`** for semantic search over **indexed** mail (not entire mailbox history until background index completes).
 
 ### 2. Hero workflow — schedule a meeting (90s)
 
@@ -26,6 +55,7 @@ This is the headline feature:
 2. Press **`M`** — inline availability appears beside the thread.
 3. Pick a slot (busy attendee slots are grayed when Calendar free/busy is available).
 4. Review the confirmation draft in the composer → send.
+5. Optional: open **Calendar** tab (~3s) to see the new Meet event.
 
 ### 3. Command palette & deep links (45s)
 
@@ -36,8 +66,8 @@ This is the headline feature:
 ### 4. Agent with approvals (60s)
 
 - Open the **Agent** tab (mobile) or right panel (desktop).
-- Ask: *"Summarize this thread"* or *"Draft a follow-up to confirm Tuesday."*
-- Approve **`send_email`** or **`create_calendar_invite`** when prompted — nothing sends without your click.
+- Try: *"Send a calendar invite to friend@corsair.dev at 9 AM next Thursday and email them to confirm."* (import **demo contacts** in onboarding if needed)
+- Approve **`send_email`** and **`create_calendar_invite`** when prompted — nothing sends without your click.
 
 ### 5. Commitments & calendar (45s)
 
@@ -50,7 +80,7 @@ This is the headline feature:
 |--------|--------|
 | Corsair SDK reads/writes Gmail + Calendar | Archive, send, `M` flow, agent tools |
 | Typed MCP tools + approval gates | Agent chat — no silent sends |
-| AI triage quality | Lane tabs after connect |
+| AI triage quality | Lane tabs after connect (banner if AI keys missing) |
 | Keyboard density | `j/k/e/r/m/s`, G-chords, `⌘K` palette |
 | Production polish | Undo, realtime lane updates, mobile drawer |
 
@@ -69,8 +99,9 @@ See `public/demo/README.md` in the repo for the recording checklist.
 
 | Issue | Fix |
 |-------|-----|
-| "Access blocked" on Google sign-in | Email not in OAuth test users |
+| "Access blocked" on Google sign-in | OAuth not published, or email not in test users |
 | Empty semantic search | Wait for indexing banner to clear, or use advanced search (`Mod+Shift+F`) |
+| Dumb lanes / orange banner | Add OpenAI or Gemini key in Settings → AI |
 | Agent won't send | Approve the tool card; check AI keys in Settings |
 | Calendar webhooks 503 | Team must set HTTPS `APP_URL` and renew watches |
 

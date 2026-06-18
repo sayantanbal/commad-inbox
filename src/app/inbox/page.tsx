@@ -16,6 +16,7 @@ import { requireConnectedTenant } from "@/lib/corsair/tenant";
 import { getSnoozesForUser } from "@/lib/inbox/snoozes";
 import { loadInboxDataForUser } from "@/lib/inbox/load-inbox-data";
 import { renewWatchesIfNeeded } from "@/lib/webhooks/renew-watches";
+import { getAvailableProviders } from "@/lib/ai/key-store";
 import { getOnboardingRedirectPath } from "@/lib/onboarding/status";
 import { InboxClient } from "./inbox-client";
 
@@ -50,6 +51,7 @@ export default async function InboxPage({
   try {
     const backfillComplete = await isBackfillComplete(userId);
     const indexStatus = await getInboxIndexStatus(userId);
+    const aiClassificationAvailable = (await getAvailableProviders(userId)).length > 0;
     const { serialized, threads, classifications } = await loadInboxDataForUser(tenant, userId);
     const snoozes = await getSnoozesForUser(userId);
 
@@ -68,6 +70,7 @@ export default async function InboxPage({
         userEmail={userEmail}
         backfillComplete={backfillComplete}
         indexStatus={indexStatus}
+        aiClassificationAvailable={aiClassificationAvailable}
         initialSnoozes={snoozes.map((snooze) => ({
           threadId: snooze.threadId,
           until: snooze.until.toISOString(),

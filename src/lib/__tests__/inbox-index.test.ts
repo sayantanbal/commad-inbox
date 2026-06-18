@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { formatFullIndexBannerDetail } from "@/lib/backfill/inbox-index-format";
 import {
   FULL_INBOX_INDEX_MAX_THREADS,
+  INBOX_LIST_LIMIT,
   QUICK_BACKFILL_LIMIT,
 } from "@/lib/backfill/constants";
 
@@ -36,5 +37,9 @@ describe("indexing constants", () => {
 
   test("full index has a safety cap", () => {
     expect(FULL_INBOX_INDEX_MAX_THREADS).toBeGreaterThan(QUICK_BACKFILL_LIMIT);
+  });
+
+  test("inbox list shows more than quick backfill", () => {
+    expect(INBOX_LIST_LIMIT).toBeGreaterThan(QUICK_BACKFILL_LIMIT);
   });
 });

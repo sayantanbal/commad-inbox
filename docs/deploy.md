@@ -97,11 +97,21 @@ Vercel Hobby cron is daily-only. Use an external pinger every **1 minute**:
 Run locally before deploy:
 
 ```bash
+bun run smoke:submission   # unit tests + agent eval + build
 bun run build
 bun test
 ```
 
-Live checklist:
+After deploy, run automated prod checks (sign-in, DB, Pusher, Pub/Sub, AI keys):
+
+```bash
+bun run smoke:prod
+# optional override: PROD_SMOKE_URL=https://your-app.vercel.app bun run smoke:prod
+```
+
+`GET /api/health` returns `{ ok, db, integrations: { pusher, gmailPubSub, openai, gemini } }`.
+
+Live checklist (manual — requires your Google account):
 
 1. Open `https://your-app.vercel.app/sign-in` → Google sign-in
 2. Connect Gmail + Calendar on `/onboarding/connect`

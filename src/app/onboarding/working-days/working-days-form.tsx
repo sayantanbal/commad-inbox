@@ -107,6 +107,37 @@ export function WorkingDaysForm({
     }
   }
 
+  async function skipToInbox() {
+    setSaving(true);
+    setError(null);
+    try {
+      const resolvedTimezone = resolveTimezoneSelection(timezone);
+      const response = await fetch("/api/inbox/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timezone: resolvedTimezone,
+          workingDaysStructured: {
+            ...DEFAULT_WORKING_DAYS,
+            timezone: resolvedTimezone,
+          },
+          workingDaysTextOverride: null,
+          workingDaysSource: "wizard",
+          onboardingCompletedAt: new Date().toISOString(),
+        }),
+      });
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error ?? "Failed to skip onboarding");
+      }
+      router.push("/inbox");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div>
       <label className="type-caption text-ink-muted-48" htmlFor="working-days-timezone">
@@ -185,6 +216,17 @@ export function WorkingDaysForm({
       <Button size="lg" className="mt-8 w-full" onClick={() => void handleSubmit()} disabled={saving}>
         Continue
         <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+      </Button>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="mt-3 w-full type-caption text-ink-muted-48"
+        onClick={() => void skipToInbox()}
+        disabled={saving}
+      >
+        Skip to inbox — use default 9–5 weekdays
       </Button>
     </div>
   );

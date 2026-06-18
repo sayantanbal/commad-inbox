@@ -2,10 +2,10 @@ import { AuthMissingError } from "corsair/core";
 import type { CorsairInstance } from "@/lib/corsair";
 import { isGmailApiDisabled, toGmailApiDisabledError } from "@/lib/corsair/api-errors";
 import { mapGmailThread } from "@/lib/corsair/gmail-parse";
-import { QUICK_BACKFILL_LIMIT } from "@/lib/backfill/constants";
+import { INBOX_LIST_LIMIT } from "@/lib/backfill/constants";
 import type { Thread } from "@/lib/types";
 
-const THREAD_LIMIT = QUICK_BACKFILL_LIMIT;
+const THREAD_LIMIT = INBOX_LIST_LIMIT;
 
 function isAuthError(error: unknown): boolean {
   if (error instanceof AuthMissingError) return true;

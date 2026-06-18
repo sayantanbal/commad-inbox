@@ -37,6 +37,10 @@ export async function classifyThreadForUser(
     body: latestBody(thread),
   });
 
+  if (result.classificationSource === "heuristic") {
+    await broadcastInboxEvent(userId, { type: "classify-degraded" });
+  }
+
   const row = {
     id: classificationId(userId, threadId),
     userId,

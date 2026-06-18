@@ -14,7 +14,9 @@ export type ClassifyThreadInput = {
   body: string;
 };
 
-export type ClassifyThreadResult = ClassificationResult;
+export type ClassifyThreadResult = ClassificationResult & {
+  classificationSource: "ai" | "heuristic";
+};
 
 const SYSTEM = `You triage email for a consultant whose inbox is a meeting pipeline.
 Return JSON only with keys: priority, lane, schedulingIntent.
@@ -25,7 +27,7 @@ schedulingIntent: when lane is schedule or email proposes times, include propose
 
 Be decisive: use schedule for any meeting/time coordination; use fyi for newsletters, notifications, and read-only updates; use done only for obvious spam.`;
 
-function heuristicFallback(input: ClassifyThreadInput): ClassificationResult {
+function heuristicFallback(input: ClassifyThreadInput): ClassifyThreadResult {
   const lane = inferLaneFromThread({
     subject: input.subject,
     snippet: input.snippet,
@@ -39,6 +41,7 @@ function heuristicFallback(input: ClassifyThreadInput): ClassificationResult {
     }),
     lane,
     schedulingIntent: null,
+    classificationSource: "heuristic",
   };
 }
 
@@ -63,7 +66,7 @@ ${body}`;
       SYSTEM,
       classificationAiOutputSchema
     );
-    return sanitizeClassificationResult(data);
+    return { ...sanitizeClassificationResult(data), classificationSource: "ai" };
   } catch (error) {
     console.warn("[classify] AI request failed, using heuristics:", error);
     return heuristicFallback(input);

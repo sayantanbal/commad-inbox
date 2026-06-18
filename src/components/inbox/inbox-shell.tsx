@@ -136,6 +136,7 @@ interface InboxShellProps {
   userEmail: string;
   backfillComplete: boolean;
   indexStatus: InboxIndexStatus;
+  aiClassificationAvailable: boolean;
   initialSnoozes: Array<{ threadId: string; until: Date }>;
   initialOpenSettings?: string | null;
   googleContactsReturn?: string | null;
@@ -165,6 +166,7 @@ export function InboxShell({
   userEmail,
   backfillComplete,
   indexStatus: initialIndexStatus,
+  aiClassificationAvailable,
   initialSnoozes,
   initialOpenSettings,
   googleContactsReturn,
@@ -544,6 +546,11 @@ export function InboxShell({
 
 
   const [indexStatus, setIndexStatus] = useState(initialIndexStatus);
+  const [classifierDegraded, setClassifierDegraded] = useState(!aiClassificationAvailable);
+
+  useEffect(() => {
+    setClassifierDegraded(!aiClassificationAvailable);
+  }, [aiClassificationAvailable]);
 
   useEffect(() => {
     setIndexStatus(initialIndexStatus);
@@ -649,6 +656,10 @@ export function InboxShell({
   );
 
   const handleRealtimeEvent = useCallback((event: InboxRealtimeEvent) => {
+    if (event.type === "classify-degraded") {
+      setClassifierDegraded(true);
+      return;
+    }
     if (event.type === "inbox-changed") {
       scheduleSyncInbox();
       void queryClient.invalidateQueries({ queryKey: inboxQueryKeys.all });
@@ -736,7 +747,23 @@ export function InboxShell({
         inboxTotalThreads: event.total,
         remainingThreads: 0,
       }));
-      setActivities((prev) => prev.filter((a) => a.id !== "full-index"));
+      setActivities((prev) => {
+        const withoutIndex = prev.filter((a) => a.id !== "full-index");
+        if (event.indexed <= 0) return withoutIndex;
+        return [
+          {
+            id: "full-index-done",
+            type: "background",
+            label: "Search ready",
+            detail: `${event.indexed} threads indexed for semantic search`,
+            progress: 100,
+          },
+          ...withoutIndex,
+        ];
+      });
+      window.setTimeout(() => {
+        setActivities((prev) => prev.filter((a) => a.id !== "full-index-done"));
+      }, 5000);
       scheduleSyncInbox();
     }
     if (event.type === "reembed-progress") {
@@ -2076,6 +2103,15 @@ export function InboxShell({
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background">
+        {classifierDegraded ? (
+          <div
+            className="shrink-0 border-b border-[color:var(--color-warning-border)] bg-[rgba(255,149,0,0.08)] px-4 py-2 type-caption text-ink"
+            role="status"
+          >
+            AI classification unavailable — using rule-based triage. Add an OpenAI or Gemini key in
+            Settings → AI for full lane quality.
+          </div>
+        ) : null}
         <header
           className="flex h-11 shrink-0 items-center justify-between border-b border-hairline px-4 supports-[backdrop-filter]:bg-[color:var(--color-canvas-parchment)]/90 backdrop-blur-[20px] backdrop-saturate-[1.8] bg-parchment"
         >

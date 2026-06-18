@@ -7,10 +7,10 @@ Use this when submitting **Command Center Builder** (MacBook Giveaway Hackathon)
 | Item | Status | Link |
 |------|--------|------|
 | Open-source GitHub repo | ✅ | https://github.com/sayantanbal/commad-inbox |
-| Live deployed app | ☐ | https://command-inbox.sayantanbal.in |
-| Demo video (YC-style, ~90s) | ☐ | _add YouTube/Loom URL_ |
-| X/Twitter post | ☐ | _add post URL_ |
-| LinkedIn post | ☐ | _add post URL_ |
+| Live deployed app | ✅ | https://command-inbox.sayantanbal.in |
+| Demo video (YC-style, ~90s) | ☐ | _in progress — add YouTube/Loom URL_ |
+| X/Twitter post | ✅ | https://x.com/sayantan_bal/status/2065756194409713738 |
+| LinkedIn post | ✅ | https://www.linkedin.com/posts/sayantanbal_github-sayantanbalcommad-inbox-activity-7473281073972420608-U5-m |
 | Short README | ✅ | [README.md](../README.md) |
 | Corsair features used | ✅ | [README — Corsair features](../README.md#corsair-features-used) |
 | Agent eval XML + Playwright approval test | ✅ | [`evaluations/inbox-agent.xml`](../evaluations/inbox-agent.xml), `e2e/agent-approval.spec.ts` |
@@ -41,13 +41,14 @@ Hashtags: `#chaicode` `#corsair-dev`
 
 ## Judge OAuth
 
-Add judge emails as Google OAuth test users — see [judge-oauth.md](./judge-oauth.md).
+Publish OAuth to **Production** (any Gmail) or add judge emails as **Test users** — see [judge-oauth.md](./judge-oauth.md).
 
 ## Pre-submit smoke test
 
 ```bash
 bun install
 bun run smoke:submission   # unit tests + agent eval fixtures + build
+bun run smoke:prod         # after deploy — prod health + integrations
 bun run validate:agent-eval
 bun run test:e2e           # Playwright — agent approval harness (E2E_TEST=1)
 bun run smoke:corsair      # optional — needs DATABASE_URL + OAuth tenant

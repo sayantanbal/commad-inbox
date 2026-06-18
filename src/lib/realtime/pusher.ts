@@ -55,6 +55,9 @@ export type InboxRealtimeEvent =
   | {
       type: "inbox-changed";
       reason?: "gmail" | "poll";
+    }
+  | {
+      type: "classify-degraded";
     };
 
 let server: Pusher | null = null;

@@ -1,6 +1,13 @@
-# Google OAuth — judge access (Testing mode)
+# Google OAuth — judge access
 
-Command Inbox uses a Google Cloud OAuth app in **Testing** mode. Only emails listed as **Test users** can sign in until the app is published.
+Command Inbox supports two judge sign-in paths:
+
+| Mode | Who can sign in | Setup |
+|------|-----------------|-------|
+| **Production (recommended)** | Any Google account | GCP → OAuth consent screen → **Publish app** — see [Production publish](#production-publish--verification) |
+| **Testing** | Only emails on **Test users** list | Add each judge Gmail in GCP — see [Request access](#request-access-judges) |
+
+We do **not** publish shared demo passwords. Every user signs in with their own Google account.
 
 ## Request access (judges)
 
@@ -46,6 +53,53 @@ demo@yourdomain.com
 - They signed in with a different Google account than the one you added.
 - Production `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` do not match the OAuth app where test users were added.
 
+## Production publish & verification
+
+**For hackathon submit today:** you do **not** need full Google verification to unblock judges — but you need to understand the tradeoffs.
+
+### What “Publish App” does (instant)
+
+In GCP → **OAuth consent screen** → **Publish App** moves Testing → Production in **minutes**. That alone does **not** remove the “unverified app” warning for Gmail/Calendar scopes.
+
+### What verification requires (separate step)
+
+After publishing, click **Prepare for verification** / **Submit for verification**. Google typically asks for:
+
+| Item | You have it? |
+|------|----------------|
+| Privacy policy URL | ✅ `https://command-inbox.sayantanbal.in/privacy` |
+| Homepage / app URL | ✅ `https://command-inbox.sayantanbal.in` |
+| Authorized domains | Confirm `sayantanbal.in` in GCP |
+| Scope justification | Explain Gmail read/send + Calendar read/write for triage, `M` invites, agent |
+| Demo video | ⏳ Record today — **reuse for Google verification submission** |
+| OAuth flow in video | Must show consent screen → connect → feature using each scope |
+
+Official flow: [Submitting your app for verification](https://support.google.com/cloud/answer/13461325) · [Production readiness overview](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview)
+
+### How long verification takes
+
+| Scope tier | Typical timeline | Notes |
+|------------|------------------|-------|
+| Publish only (unverified) | **Minutes** | Any Google user can try; **unverified** warning remains |
+| Sensitive (Calendar, `gmail.send`, etc.) | **2–4 weeks** | After complete submission |
+| Restricted (full Gmail read — likely your app) | **4–12+ weeks** | May require **CASA Tier 2** security assessment (~$500–1k) |
+
+**Reality for submit today:** Start verification **now** (use today’s demo video), but **do not wait** for approval to submit the hackathon. Judges can still sign in while unverified — they click through the warning (“Advanced” → continue).
+
+### Hackathon-safe paths (pick one)
+
+| Path | When to use | Judge experience |
+|------|-------------|------------------|
+| **A. Publish unverified** (your plan) | Submit today; judges unknown | Warning screen, then works |
+| **B. Testing + test users** | Organizers give you judge emails | No publish needed; add up to **100** emails |
+| **C. Verified** | Weeks from now | Clean consent — too slow for today |
+
+**Recommended today:** **Publish now** → submit verification with demo video → in README say *“Sign in with any Google account; you may see an unverified-app warning — click Advanced to continue.”* Optionally ask ChaiCode for judge emails as **Plan B** (add to test users if publish breaks).
+
+### 7-day token expiry (Testing mode)
+
+While app stays **Testing** (not published), refresh tokens expire after **7 days**. **Publishing to Production** (even unverified) avoids that — important if judges evaluate over multiple days.
+
 ## Demo account tips
 
 - Use a real inbox with a few scheduling threads in **Schedule** lane for the `M` hero flow.
@@ -61,7 +115,7 @@ For hackathon recording and judge demos, use a **dedicated Google account** that
 3. Confirm semantic search (`/`) returns results across a large thread count.
 4. Use this same account in the demo video — do not connect a fresh empty inbox on camera.
 
-Fresh connects still work: the **last 50 threads** get lanes immediately, then older mail indexes in the background with a progress banner.
+Fresh connects still work: the **last 50 threads** get lanes immediately (quick backfill), then the inbox list loads up to **150** threads while older mail indexes in the background with a progress banner.
 
 ### Calendar webhook security
 

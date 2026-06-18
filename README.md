@@ -12,7 +12,7 @@ A keyboard-first Gmail + Google Calendar command center built on [Corsair](https
 - **Agent chat** — Corsair MCP discovery tools + approval-gated `send_email` / `create_calendar_invite`; native Gmail attachments (upload or forward from thread, up to ~20 MB per file) with approval preview
 - **Command palette & shortcuts** — Superhuman-style keys; PWA + mobile tabs
 
-> **For judges:** Start with the [Evaluator guide](https://docs.command-inbox.sayantanbal.in/docs/overview/evaluator-guide) (5-minute script). Add your Gmail to OAuth **Test users** first — see [Judge access](https://docs.command-inbox.sayantanbal.in/docs/overview/judge-access). Hero demo: **Schedule** lane → **`M`** → pick slot → send confirmation.
+> **For judges:** Start with the [Evaluator guide](https://docs.command-inbox.sayantanbal.in/docs/overview/evaluator-guide) (5-minute script). Sign in with **any Google account** at [command-inbox.sayantanbal.in](https://command-inbox.sayantanbal.in) once OAuth is published to Production — see [Judge access](https://docs.command-inbox.sayantanbal.in/docs/overview/judge-access). **Fast path:** on onboarding, click **Skip to inbox** to reach triage immediately. Hero demo: **Schedule** lane → **`M`** → pick slot → send confirmation.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ flowchart LR
     ui --> vectors
 ```
 
-**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair processes event → AI classify + pgvector embed → Pusher → UI. Inbox reads go through the **Corsair SDK** (`tenant.gmail.api.*`, `tenant.googlecalendar.api.*`), which handles OAuth and caches mail in Postgres. App-owned tables store lanes, snoozes, meetings, and embeddings. **Semantic search (`/`)** queries locally indexed threads; **advanced search (`Mod+Shift+F`)** hits Gmail history via Corsair.
+**Data flow:** Gmail push → Pub/Sub → `/api/webhooks` → Corsair `processWebhook` → AI classify + pgvector embed → Pusher → UI. Calendar push uses a separate verified route (`/api/webhooks/calendar`). Inbox reads go through the **Corsair SDK** (`tenant.gmail.api.*`, `tenant.googlecalendar.api.*`), which handles OAuth and caches mail in Postgres. Where the SDK does not expose an API (watches, attachments, attendee freeBusy), the app calls Google REST via **`google-proxy`** using **Corsair-issued tokens** — the app never stores raw OAuth credentials. App-owned tables store lanes, snoozes, meetings, and embeddings. **Semantic search (`/`)** queries locally indexed threads; **advanced search (`Mod+Shift+F`)** hits Gmail history via Corsair.
 
 ## Stack
 
@@ -147,10 +147,11 @@ Run locally: `bun run docs:dev` → [http://localhost:3001](http://localhost:300
 
 - **Embedded SDK** — multi-tenant Postgres + KEK, Gmail + Google Calendar plugins
 - **OAuth connect** — `/api/connect/google`, callback at `/api/auth/callback/corsair`
-- **Webhooks** — `processWebhook` on `/api/webhooks?tenantId=…` for Gmail + Calendar push
+- **Webhooks** — Gmail: Corsair `processWebhook` on `/api/webhooks?tenantId=…`; Calendar: verified push on `/api/webhooks/calendar`
 - **Gmail API via Corsair** — threads list/get, send, modify (archive/restore), advanced search
 - **Calendar API via Corsair** — events create/update/delete with Meet links
-- **MCP adapter** — `list_operations`, `get_schema` for agent discovery; write actions use typed tools with user approval
+- **MCP adapter** — `list_operations`, `get_schema` for agent discovery; write actions use typed approval-gated tools (not `run_script`)
+- **Standalone MCP** — `bun mcp-server.ts` for Cursor / IDE (stdio server; same Corsair tenant tools)
 
 ## Bonus tasks attempted
 
@@ -182,9 +183,9 @@ Quick checklist:
 
 `vercel.json` configures Bun install/build. Migrations run manually against Neon, not during Vercel build.
 
-## Google OAuth testing mode
+## Google OAuth (judges)
 
-Keep the OAuth app in **Testing** and add judge emails as test users. See **[docs/judge-oauth.md](docs/judge-oauth.md)** for the checklist.
+Publish the OAuth app to **Production** so any Gmail can sign in (recommended for hackathon judges). While in **Testing** mode, add judge emails as test users instead. See **[docs/judge-oauth.md](docs/judge-oauth.md)** for both paths.
 
 ## Hackathon submission
 
@@ -199,9 +200,9 @@ Full checklist: **[docs/submission.md](docs/submission.md)**
 |-------------|------|
 | GitHub | https://github.com/sayantanbal/commad-inbox |
 | Live app | https://command-inbox.sayantanbal.in |
-| Demo video | _add URL before submit_ |
-| X post | _add URL before submit_ |
-| LinkedIn post | _add URL before submit_ |
+| Demo video | _in progress — add URL before submit_ |
+| X post | https://x.com/sayantan_bal/status/2065756194409713738 |
+| LinkedIn post | https://www.linkedin.com/posts/sayantanbal_github-sayantanbalcommad-inbox-activity-7473281073972420608-U5-m |
 
 ## Demo video
 
@@ -214,7 +215,7 @@ Script with timestamps: **[docs/demo-script.md](docs/demo-script.md)**
 3. **Hero** — open thread → `M` → pick slot → invite + draft  
 4. **Agent** — *"Send a calendar invite to friend@corsair.dev at 9 AM next Thursday…"* → approve email + invite previews  
 5. **Search** — `/` semantic + `Mod+Shift+F` advanced filter by sender  
-6. **Stack** — Corsair, pgvector, Vercel AI SDK, keyboard UX
+6. **Stack** — Corsair SDK + webhooks + approval-gated MCP + pgvector + live URL; mention `bun mcp-server.ts` for Cursor
 
 ## Troubleshooting
 

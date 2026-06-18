@@ -22,6 +22,7 @@ interface InboxClientProps {
   userEmail: string;
   backfillComplete: boolean;
   indexStatus: InboxIndexStatus;
+  aiClassificationAvailable: boolean;
   initialSnoozes: Array<{ threadId: string; until: string }>;
   initialOpenSettings?: string | null;
   googleContactsReturn?: string | null;
@@ -34,6 +35,7 @@ export function InboxClient({
   userEmail,
   backfillComplete,
   indexStatus,
+  aiClassificationAvailable,
   initialSnoozes,
   initialOpenSettings,
   googleContactsReturn,
@@ -51,6 +53,7 @@ export function InboxClient({
         userEmail={userEmail}
         backfillComplete={backfillComplete}
         indexStatus={indexStatus}
+        aiClassificationAvailable={aiClassificationAvailable}
         initialSnoozes={initialSnoozes.map((snooze) => ({
           threadId: snooze.threadId,
           until: new Date(snooze.until),

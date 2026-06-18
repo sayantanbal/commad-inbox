@@ -39,6 +39,7 @@ export function useInboxRealtime(
       channel.bind("reembed-complete", handler);
       channel.bind("calendar-updated", handler);
       channel.bind("inbox-changed", handler);
+      channel.bind("classify-degraded", handler);
     }
 
     const pollMs = PUSHER_KEY && PUSHER_CLUSTER ? 60_000 : 15_000;

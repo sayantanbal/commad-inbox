@@ -20,6 +20,7 @@
     "corsair:reset": "bun scripts/corsair-reset.ts",
     "smoke:corsair": "bun scripts/smoke-corsair.ts",
     "smoke:submission": "bun scripts/smoke-submission.ts",
+    "smoke:prod": "bun scripts/smoke-prod.ts",
     "validate:agent-eval": "bun scripts/validate-agent-eval.ts",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium --with-deps",

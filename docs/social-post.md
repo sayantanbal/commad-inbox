@@ -44,7 +44,15 @@ Builder Mode On | MacBook Giveaway Hackathon
 
 ## Before posting
 
-- [ ] Live app: https://command-inbox.sayantanbal.in
-- [ ] GitHub: https://github.com/sayantanbal/commad-inbox
+- [x] Live app: https://command-inbox.sayantanbal.in
+- [x] GitHub: https://github.com/sayantanbal/commad-inbox
 - [ ] Attach 30–60s screen recording (see [demo-script.md](./demo-script.md))
 - [ ] Confirm judge emails added as Google OAuth test users ([judge-oauth.md](./judge-oauth.md))
+
+## Published URLs
+
+| Platform | URL |
+|----------|-----|
+| LinkedIn | https://www.linkedin.com/posts/sayantanbal_github-sayantanbalcommad-inbox-activity-7473281073972420608-U5-m |
+| X | https://x.com/sayantan_bal/status/2065756194409713738 |
+| Demo video | _pending_ |
